@@ -1,9 +1,18 @@
 # Labels on ZPL printers
 
+**Parked: not part of v1.** Labels reach Zebra printers through their driver like any other printer. This
+is the design for a later version, kept so the vectors in `testdata/zpl/` and the thinking are not lost.
+
 Zebra label printers (the warehouses mostly run them; the test unit is a GX420d) take ZPL, their own command
-language, straight from the host. NODE Print sends ZPL to them instead of going through the driver's paper
-settings, so a label comes out at the printer's own dots with nothing scaled, dithered or cut off by a
+language, straight from the host. NODE Print would send ZPL to them instead of going through the driver's
+paper settings, so a label comes out at the printer's own dots with nothing scaled, dithered or cut off by a
 mis-set driver. Both apps implement this the same way; `testdata/zpl/` holds vectors they must both pass.
+
+Known gaps to close before this ships: a `^GF` field holds at most 99,999 bytes, so a 4 × 6 bitmap must be
+cut into horizontal strips of `floor(99999 / bytesPerRow)` rows, each its own `^FO0,<y>^GFA…^FS` with the
+row-repeat `:` never crossing a strip; the job should pin `^PON^PMN^LRN` so a previous job's orientation,
+mirror or reverse setting cannot leak in; and a queue is only ZPL on explicit evidence (`CMD:…ZPL…` in the
+1284 id or a ZPL driver), never on the Zebra name alone.
 
 ## Which queues count as ZPL
 

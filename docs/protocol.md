@@ -3,13 +3,17 @@
 NODE Print is a small desktop app that sits in the tray / menu bar and prints what the NODE web app sends it:
 shipping labels on a label printer, pick sheets and packing slips on a document printer. The Windows and
 macOS apps are separate code bases; this document is the one thing they share. The web app talks to both
-exactly the same way.
+exactly the same way. Everything prints through the OS printer driver; sending ZPL straight to Zebra printers
+(`zpl.md`) is parked, not part of v1.
 
 ## Transport
 
 - The app listens on `http://127.0.0.1:19233` and nothing else: no `0.0.0.0`, no LAN, no IPv6. The web app
   always uses the literal `127.0.0.1`, never `localhost`.
-- One instance per user session. A second launch brings the running window to the front and exits.
+- One instance per machine (the port belongs to the machine, not to a user session). A second launch brings
+  the running window to the front and exits. When the port cannot be bound (something else holds it) the
+  window still opens, shows "Port 19233 is in use" under the header, and the app retries every 5 s; it never
+  looks healthy while the server is down.
 - Every response body is JSON (`application/json; charset=utf-8`).
 - Errors use the HTTP status plus `{"error": {"code": "…", "message": "…"}}`. `code` is one of the constants
   below; `message` is English, written for a person, and may carry OS detail (printer name, driver error).
@@ -28,8 +32,18 @@ For an allowed `Origin` the app answers with `Access-Control-Allow-Origin: <that
 returns `204`. Any other origin gets no CORS headers at all, so the browser blocks it; requests without an
 `Origin` header (curl, tests) are served.
 
-Chrome 142+ asks the user once per site before a public https page may reach `127.0.0.1` (Local Network
-Access, "loopback" permission). That is handled on the web side; the app only needs the headers above.
+What the browser side has to live with (the app only needs the headers above):
+
+- Chrome 142+ / Edge ask the user once per site before a public https page may reach `127.0.0.1` (Local
+  Network Access, the "loopback" permission since Chrome 145). The old `Access-Control-Allow-Private-Network`
+  header does not grant it; the user does, in the prompt.
+- Safari does not let an https page call plain-http loopback (WebKit treats it as mixed content). v1 offers
+  direct printing in Chrome and Edge; Safari keeps the download buttons.
+- The web separates the first connection (no short timeout: the user may be answering the permission prompt)
+  from later probes (short timeout). A failed fetch does not say whether the app is not running, the
+  permission was refused or the browser blocked the call; the web shows one message for all of them, "Cannot
+  reach NODE Print on this computer", with the install and permission hints, and never claims the app is not
+  installed.
 
 ## Resources
 
@@ -56,8 +70,8 @@ Access, "loopback" permission). That is handled on the web side; the app only ne
 - `channels.<name>.state`: `"ready"`, `"busy"` (the queue is printing), `"paused"`, `"offline"`, `"error"`,
   `"missing"` (chosen printer no longer installed) or `"none"` (nothing chosen).
 
-The web calls this with a short timeout (about 1.5 s) to decide whether to offer printing. A failed call means
-the app is not running or the browser was not allowed to reach it; the web tells those two apart itself.
+The web calls this to decide whether to offer printing (see CORS above for timeouts and failures). It says
+what the app and its printers look like now; it never says whether a job printed.
 
 ### `GET /printers`
 
@@ -65,9 +79,12 @@ the app is not running or the browser was not allowed to reach it; the web tells
 { "printers": [ { …Printer… }, … ] }
 ```
 
-All printers the OS reports, except virtual ones that need a dialog or write a file (`Microsoft Print to
-PDF`, `Microsoft XPS Document Writer`, fax, `FILE:` ports, macOS "Save as PDF" style queues). Order: label
-printers first, then the rest, each group by name.
+All printers the OS reports, except queues whose port or backend needs a dialog or is not a device: on
+Windows ports `PORTPROMPT:`, `FILE:`, `NUL` and `SHRFAX:` (which is what hides `Microsoft Print to PDF`,
+`Microsoft XPS Document Writer`, OneNote and fax); on macOS queues without a printing backend (the PDF /
+preview style ones). The rule is by port or backend, never by name, so a queue re-pointed at a real port or
+at a local port with a fixed file path (as the CI tests do) is listed. Order: label printers first, then the
+rest, each group by name.
 
 ### Printer
 
@@ -79,7 +96,6 @@ printers first, then the rest, each group by name.
   "connection": "usb",
   "kind": "thermal",
   "papers": ["4x6"],
-  "language": "zpl",
   "dpi": 203,
   "state": "ready",
   "stateMessage": "",
@@ -93,31 +109,50 @@ printers first, then the rest, each group by name.
   `""` when unknown.
 - `connection`: `"usb"`, `"network"`, `"bluetooth"` or `"other"`. Say `"network"` whenever a printer is
   reached over IP; the OS does not tell Wi-Fi from Ethernet, so the app does not claim to.
-- `kind`: `"thermal"` for a label printer, `"other"` otherwise. A label printer is a ZPL queue, or a queue
-  whose largest paper (by area, among the sizes the driver reports) has a short edge of at most 4.25 in
-  (108 mm). Nothing else is guessed: no "laser", no "inkjet".
-- `papers`: which of `"4x6"`, `"Letter"`, `"A4"` the driver reports. May be empty.
-- `language`: `"zpl"` when the queue is a ZPL printer (see `zpl.md`), else `"driver"`.
-- `dpi`: the print resolution the driver reports, `203` for a ZPL printer that reports none, `0` otherwise.
+- `kind`: `"thermal"` for a label printer, `"other"` otherwise. A label printer is a queue whose largest
+  paper (by area, among the sizes the driver reports) has a short edge of at most 4.25 in (108 mm). Nothing
+  else is guessed: no "laser", no "inkjet".
+- `papers`: which of `"4x6"`, `"Letter"`, `"A4"` the driver reports. May be empty, which only means none of
+  the three was listed, not that the printer refuses custom sizes.
+- `dpi`: the queue's current print resolution as the driver reports it, `0` when unknown.
 - `state`: `"ready"`, `"busy"`, `"paused"`, `"offline"` or `"error"`; `stateMessage` carries the OS text for
-  `error`, else `""`.
+  `error`, else `""`. When the OS reports several things at once the first of `offline`, `error`, `paused`,
+  `busy` wins; `ready` means the OS queue reports nothing in the way, not that the device is known to be on.
+  A channel's state is the same list with `missing` (chosen printer not installed) ahead of `offline` and
+  `none` when nothing is chosen; a job is refused for `missing`, `offline`, `error` and `paused` and queued
+  for `busy`.
 - `default`: the OS default printer.
+
+### Page geometry
+
+Both apps reduce a PDF page to the same visible box before anything else: the `CropBox` (the `MediaBox` when
+there is none), with its origin moved to (0, 0), then turned by the page's own `/Rotate`. Width and height
+are in PDF points (1/72 in); what the platform API hands back (Windows `PdfPage.Size` in DIPs at 1/96 in,
+PDFKit `bounds(for:)` plus `rotation`) is converted to that. A page is landscape when that width is greater
+than that height. Content outside the visible box is not drawn.
 
 ### `POST /print?channel=label|document&copies=1&title=…`
 
-Body: the PDF itself, `Content-Type: application/pdf`, at most 50 MB. `copies` defaults to 1 (1–99). `title`
+Body: the document itself, `Content-Type: application/pdf`, `image/png` or `image/jpeg` (an image is one
+page), at most 52,428,800 bytes (exactly that many is still accepted). `copies` defaults to 1 (1–99). `title`
 is the job name shown in the OS queue; defaults to `NODE label` / `NODE document`.
 
-- `label`: every page is printed as one 4 × 6 in label, portrait. A landscape page is rotated 90° clockwise
-  first. The page is scaled to fit inside the label (aspect kept) and centred. ZPL printers get raw ZPL
-  (`zpl.md`); other printers get a 4 × 6 in job through the OS driver with the paper set on the job, not in
-  the printer's defaults.
+- `label`: every page is printed as one 4 × 6 in label, portrait. A landscape page (see Page geometry) is
+  rotated 90° clockwise first. The page is scaled to fit inside the printable area of the 4 × 6 in paper
+  (aspect kept) and centred. The paper is set on the job, not in the printer's defaults; the app reads back
+  the paper the driver settled on and refuses with `PRINT_FAILED` when it is not 4 × 6 in, rather than
+  letting the driver print on whatever it fell back to.
 - `document`: every page is printed on Letter, in the page's own orientation, scaled to fit the printable area
-  and centred, through the OS driver.
+  and centred.
 
-Jobs on one channel are handed to the OS in arrival order, one at a time, so a batch of labels sent one
-request after another comes out in order. The response is sent once the job is in the OS queue (or, for ZPL,
-written to the printer), not when paper comes out.
+Copies: on `label` each page is repeated `copies` times in a row (A A B B); on `document` the whole document
+is repeated (A B A B). The app expands the pages itself and submits one job with one copy.
+
+A job takes its place in the channel's queue when its body has been received in full, and prints on the
+printer chosen at that moment; jobs on one channel go to the OS one at a time, in that order, so a batch of
+labels sent one request after another comes out in order. The response is sent once the OS spooler has
+accepted the whole job, not when paper comes out. A timeout or a dropped connection does not mean nothing
+printed, so the web never resends a job on its own.
 
 ```json
 { "job": { "channel": "label", "printer": "ZDesigner GX420d", "pages": 1, "copies": 1 } }
@@ -129,13 +164,13 @@ Errors:
 |--------|-----------------------|--------------------------------------------------------|
 | 400    | `BAD_CHANNEL`         | `channel` is missing or not `label` / `document`       |
 | 400    | `BAD_COPIES`          | `copies` is not 1–99                                   |
-| 400    | `BAD_DOCUMENT`        | the body is not a PDF the app can open, or has 0 pages |
-| 413    | `TOO_LARGE`           | body over 50 MB                                        |
+| 400    | `BAD_DOCUMENT`        | the body is not a PDF / PNG / JPEG the app can open, or has 0 pages |
+| 413    | `TOO_LARGE`           | body over 52,428,800 bytes                             |
 | 409    | `NO_PRINTER`          | the channel has no printer chosen                      |
-| 409    | `PRINTER_UNAVAILABLE` | chosen printer is missing, offline or paused           |
+| 409    | `PRINTER_UNAVAILABLE` | chosen printer is missing, offline, in error or paused |
 | 500    | `PRINT_FAILED`        | the OS or the printer refused the job (`message` says) |
 
-Anything else is `404 {"error":{"code":"NOT_FOUND"}}` or `405 {"error":{"code":"METHOD_NOT_ALLOWED"}}`.
+Anything else is `404` with code `NOT_FOUND` or `405` with code `METHOD_NOT_ALLOWED`, both with a `message`.
 
 ## Config file
 
@@ -152,5 +187,6 @@ JSON, written by the app, hand-editable:
 }
 ```
 
-Channel values are printer `id`s. On first run the app picks the first `thermal` printer for `label` and the
-OS default printer (if not thermal) for `document`; the user can change both in the window.
+Channel values are printer `id`s. On first run the app picks, among the printers `/printers` lists, the first
+`thermal` one for `label` and the OS default printer (if listed and not thermal) for `document`, else leaves
+the channel empty; the user can change both in the window.

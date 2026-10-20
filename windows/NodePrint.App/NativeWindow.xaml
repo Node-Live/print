@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="NodePrint.App.NativeWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:NodePrint.App">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <StackPanel Padding="24,16,24,24" Spacing="16">
+        <InfoBar x:Name="PortBar" Severity="Error" IsClosable="False" />
+        <TextBlock x:Name="LinkText" Style="{StaticResource BodyTextBlockStyle}" />
+        <local:NativeChannel x:Name="LabelChannel" />
+        <local:NativeChannel x:Name="DocumentChannel" />
+        <TextBlock
+            x:Name="VersionText"
+            Style="{StaticResource CaptionTextBlockStyle}"
+            Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+    </StackPanel>
+</Window>

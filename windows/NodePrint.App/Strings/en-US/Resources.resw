@@ -84,4 +84,16 @@
   <data name="Close" xml:space="preserve">
     <value>Close</value>
   </data>
+  <data name="PortInUse" xml:space="preserve">
+    <value>Port 19233 is in use</value>
+  </data>
+  <data name="LinkedToNode" xml:space="preserve">
+    <value>Linked to NODE</value>
+  </data>
+  <data name="WaitingForNode" xml:space="preserve">
+    <value>Waiting for NODE</value>
+  </data>
+  <data name="Version" xml:space="preserve">
+    <value>Version {0}</value>
+  </data>
 </root>

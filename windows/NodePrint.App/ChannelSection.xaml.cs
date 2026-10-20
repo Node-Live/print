@@ -65,6 +65,10 @@ public sealed partial class ChannelSection : UserControl
         _ => paper,
     };
 
+    private void OnPickerOpened(object sender, object e) => ChevronTurn.Angle = 180;
+
+    private void OnPickerClosed(object sender, object e) => ChevronTurn.Angle = 0;
+
     /// <summary>Fills the list first and then opens it: a popup that may leave the window is sized when it opens.</summary>
     private async void OnCardClick(object sender, RoutedEventArgs e)
     {

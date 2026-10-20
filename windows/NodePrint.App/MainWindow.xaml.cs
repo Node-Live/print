@@ -19,12 +19,14 @@ public sealed partial class MainWindow : Window
     private const int ContentHeight = 372;
 
     private readonly PrintService service;
+    private readonly Func<bool> portInUse;
     private readonly DispatcherQueueTimer refreshTimer;
     private bool quitting;
 
-    public MainWindow(PrintService service)
+    public MainWindow(PrintService service, Func<bool> portInUse)
     {
         this.service = service;
+        this.portInUse = portInUse;
         InitializeComponent();
         Handle = new HWND(WinRT.Interop.WindowNative.GetWindowHandle(this));
         Title = "NODE Print";
@@ -45,6 +47,7 @@ public sealed partial class MainWindow : Window
         Root.Background = new SolidColorBrush(mica ? ColorHelper.FromArgb(0xCC, 0xFF, 0xFF, 0xFF) : Colors.White);
 
         VersionText.Text = "v" + AppInfo.Version;
+        PortText.Text = Strings.Get("PortInUse");
         ToolTipService.SetToolTip(MinimizeButton, Strings.Get("Minimize"));
         ToolTipService.SetToolTip(CloseButton, Strings.Get("Close"));
         LabelSection.Setup(Channel.Label, service);
@@ -103,6 +106,11 @@ public sealed partial class MainWindow : Window
                 (service.ChannelStatus(Channel.Label), service.ChannelStatus(Channel.Document)));
             LabelSection.Show(label);
             DocumentSection.Show(document);
+            var link = Look.OfLink(service.LastLinked);
+            LinkText.Text = Strings.Get(link.Key);
+            LinkText.Foreground = link.Ink;
+            LinkDot.Fill = link.Dot;
+            PortText.Visibility = portInUse() ? Visibility.Visible : Visibility.Collapsed;
         }
         catch (Exception e)
         {

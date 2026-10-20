@@ -81,6 +81,31 @@
             </StackPanel>
         </Grid>
 
+        <StackPanel
+            Orientation="Horizontal"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Margin="26,25,0,0"
+            IsHitTestVisible="False">
+            <Ellipse x:Name="LinkDot" Width="6" Height="6" Margin="0,0,6,0" VerticalAlignment="Center" />
+            <TextBlock
+                x:Name="LinkText"
+                FontSize="12"
+                FontWeight="Medium"
+                TextLineBounds="Tight"
+                VerticalAlignment="Center" />
+        </StackPanel>
+
+        <TextBlock
+            x:Name="PortText"
+            Margin="0,54,0,0"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Top"
+            FontSize="11.5"
+            Foreground="#C4314B"
+            TextLineBounds="Tight"
+            Visibility="Collapsed" />
+
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
             <Button x:Name="MinimizeButton" Style="{StaticResource CaptionButtonStyle}" Content="&#xE921;" Click="OnMinimize" />
             <Button x:Name="CloseButton" Style="{StaticResource CloseCaptionButtonStyle}" Content="&#xE8BB;" Click="OnClose" />

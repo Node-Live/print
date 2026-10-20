@@ -49,8 +49,10 @@ public sealed partial class NativeChannel : UserControl
             if (papers.Count > 0) parts.Add(string.Join(" / ", papers.Select(PaperName)));
             if (Look.ConnectionKey(printer.Connection) is { } connection) parts.Add(Strings.Get(connection));
         }
-        parts.Add(Strings.Get(Look.Of(status.State).Key));
+        bool fine = status.State is ChannelState.Ready or ChannelState.Busy;
+        if (fine) parts.Add(Strings.Get(Look.Of(status.State).Key));
         InfoText.Text = string.Join(" · ", parts);
+        InfoText.Visibility = parts.Count > 0 ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
 
         StateBar.Severity = status.State switch
         {
@@ -60,7 +62,7 @@ public sealed partial class NativeChannel : UserControl
         };
         StateBar.Title = Strings.Get(Look.Of(status.State).Key);
         StateBar.Message = status.Printer?.StateMessage ?? "";
-        StateBar.IsOpen = status.State is not (ChannelState.Ready or ChannelState.Busy);
+        StateBar.IsOpen = !fine;
     }
 
     private static string PaperName(string paper) => paper switch

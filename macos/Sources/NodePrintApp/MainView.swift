@@ -128,6 +128,7 @@ struct PrinterCard: View {
     let status: ChannelStatus
     let model: AppModel
     @State private var choosing = false
+    @State private var cardBottom: CGFloat = 0
 
     var body: some View {
         Button {
@@ -172,10 +173,16 @@ struct PrinterCard: View {
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
+        .background(GeometryReader { card in
+            Color.clear.onAppear { cardBottom = card.frame(in: .global).maxY }
+        })
         // Hangs from the whole card, as wide as it, so the list stays inside the window under the printer it replaces.
         .popover(isPresented: $choosing, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
-            PrinterList(channel: channel, model: model) { choosing = false }
-                .frame(width: Theme.cardWidth)
+            // Down to the window's bottom edge at most (never under two rows); more rows scroll.
+            PrinterList(channel: channel, model: model, maxHeight: max(Theme.windowSize.height - cardBottom - 26, PrinterList.height(rows: 2))) {
+                choosing = false
+            }
+            .frame(width: Theme.cardWidth)
         }
         .onChange(of: choosing) { if choosing { model.refresh() } }
     }
@@ -225,28 +232,40 @@ struct ConnectionPill: View {
 struct PrinterList: View {
     let channel: Channel
     let model: AppModel
+    let maxHeight: CGFloat
     let done: () -> Void
 
+    static let rowHeight: CGFloat = 42
+
+    static func height(rows: Int) -> CGFloat {
+        CGFloat(rows) * rowHeight + CGFloat(max(rows - 1, 0)) * 2 + 12
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if model.printers.isEmpty {
-                Text("No printers found")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.secondary)
-                    .padding(10)
-            }
-            ForEach(model.printers) { printer in
-                Button {
-                    model.choose(printer, for: channel)
-                    done()
-                } label: {
-                    PrinterRow(printer: printer, chosen: model.channels[channel] == printer.id)
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 2) {
+                if model.printers.isEmpty {
+                    Text("No printers found")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.secondary)
+                        .frame(height: Self.rowHeight)
+                        .padding(.horizontal, 10)
                 }
-                .buttonStyle(.plain)
+                ForEach(model.printers) { printer in
+                    Button {
+                        model.choose(printer, for: channel)
+                        done()
+                    } label: {
+                        PrinterRow(printer: printer, chosen: model.channels[channel] == printer.id)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
+            .padding(6)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(6)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(height: min(Self.height(rows: max(model.printers.count, 1)), maxHeight))
     }
 }
 
@@ -282,7 +301,7 @@ struct PrinterRow: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .frame(height: PrinterList.rowHeight)
         .background(hovering ? Theme.card : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .contentShape(Rectangle())
         .onHover { hovering = $0 }

@@ -47,7 +47,7 @@ public static class UrlFetcher
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
-            throw ApiError.FetchFailed(url, $"it did not arrive within {Timeout.TotalSeconds:0} seconds.");
+            throw ApiError.FetchFailed(url, $"no complete answer within {Timeout.TotalSeconds:0} s.");
         }
         catch (HttpRequestException e)
         {

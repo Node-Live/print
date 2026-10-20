@@ -1,0 +1,12 @@
+{
+  "name": "the example in zpl.md",
+  "dpi": 203,
+  "width": 16, "length": 4,
+  "rows": [
+    "FF00",
+    "FF00",
+    "0000",
+    "FFFF"
+  ],
+  "data": "HF,:,!"
+}

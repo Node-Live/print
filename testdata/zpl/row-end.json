@@ -1,0 +1,15 @@
+{
+  "name": "a run of 0 or F that reaches the end of the row",
+  "dpi": 203,
+  "width": 32, "length": 7,
+  "rows": [
+    "1234F000",
+    "12340FFF",
+    "1234567F",
+    "12345670",
+    "0000000F",
+    "F0000000",
+    "FFFFFFF0"
+  ],
+  "data": "1234F,12340!1234567!1234567,M0!F,MF,"
+}

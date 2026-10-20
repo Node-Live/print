@@ -1,0 +1,18 @@
+{
+  "name": "a row equal to the previous row is a colon",
+  "dpi": 203,
+  "width": 16, "length": 10,
+  "rows": [
+    "0F0F",
+    "0F0F",
+    "0F0F",
+    "F0F0",
+    "0F0F",
+    "0F0F",
+    "0000",
+    "0000",
+    "FFFF",
+    "FFFF"
+  ],
+  "data": "0F0!::F0F,0F0!:,:!:"
+}

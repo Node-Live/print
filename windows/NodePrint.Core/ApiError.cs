@@ -5,6 +5,9 @@ public sealed class ApiError(int status, string code, string message) : Exceptio
     public int Status { get; } = status;
     public string Code { get; } = code;
 
+    public static ApiError ForbiddenOrigin(string origin) =>
+        new(403, "FORBIDDEN_ORIGIN", $"The origin {origin} may not use NODE Print.");
+
     public static ApiError BadChannel() =>
         new(400, "BAD_CHANNEL", "The channel must be \"label\" or \"document\".");
 
@@ -12,19 +15,22 @@ public sealed class ApiError(int status, string code, string message) : Exceptio
         new(400, "BAD_COPIES", "Copies must be a whole number from 1 to 99.");
 
     public static ApiError BadDocument(string detail) =>
-        new(400, "BAD_DOCUMENT", $"The body is not a PDF that can be printed: {detail}");
+        new(400, "BAD_DOCUMENT", $"The body is not a PDF, PNG or JPEG that can be printed: {detail}");
 
     public static ApiError TooLarge() =>
-        new(413, "TOO_LARGE", $"The document is larger than {LocalApi.MaxBodyBytes / (1024 * 1024)} MB.");
+        new(413, "TOO_LARGE", $"The document is larger than {LocalApi.MaxBodyBytes:N0} bytes.");
 
     public static ApiError NoPrinter(Channel channel) =>
         new(409, "NO_PRINTER", $"No {ChannelName(channel)} printer is chosen in NODE Print.");
 
-    public static ApiError PrinterUnavailable(string printer, ChannelState state) =>
+    public static ApiError PrinterUnavailable(string printer, ChannelState state, string detail = "") =>
         new(409, "PRINTER_UNAVAILABLE", state switch
         {
             ChannelState.Missing => $"The printer \"{printer}\" is no longer installed.",
             ChannelState.Paused => $"The printer \"{printer}\" is paused.",
+            ChannelState.Error => detail.Length > 0
+                ? $"The printer \"{printer}\" reports an error: {detail}."
+                : $"The printer \"{printer}\" reports an error.",
             _ => $"The printer \"{printer}\" is offline.",
         });
 

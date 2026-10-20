@@ -3,30 +3,16 @@ namespace NodePrint.Core.Tests;
 public sealed class PrinterRulesTests
 {
     [Theory]
-    [InlineData("ZDesigner GX420d", true)]
-    [InlineData("ZDesigner ZT410-300dpi ZPL", true)]
-    [InlineData("ZDesigner GX420d (EPL)", false)]
-    [InlineData("Zebra ZPL II Generic", true)]
-    [InlineData("Rollo Printer", false)]
-    [InlineData("Brother HL-L2350DW series", false)]
-    public void Zpl_queues_are_known_by_driver_name(string driver, bool zpl)
+    [InlineData("PORTPROMPT:", true)]
+    [InlineData("nul:", true)]
+    [InlineData("SHRFAX:", true)]
+    [InlineData("FILE:", true)]
+    [InlineData(@"C:\ci\label.pdf", false)]
+    [InlineData("USB001", false)]
+    [InlineData("Microsoft.Office.OneNote_16001.14326.0_x64__8wekyb3d8bbwe_microsoft.onenoteim_S-1-5-21", false)]
+    public void Queues_are_hidden_by_their_port_only(string port, bool hidden)
     {
-        Assert.Equal(zpl, PrinterRules.IsZpl(driver));
-    }
-
-    [Theory]
-    [InlineData("PORTPROMPT:", "Microsoft Print To PDF", true)]
-    [InlineData("PORTPROMPT:", "Microsoft XPS Document Writer v4", true)]
-    [InlineData("nul:", "Send to Microsoft OneNote 16 Driver", true)]
-    [InlineData("SHRFAX:", "Microsoft Shared Fax Driver", true)]
-    [InlineData("FILE:", "Generic / Text Only", true)]
-    [InlineData("Microsoft.Office.OneNote_16001.14326.0_x64__8wekyb3d8bbwe_microsoft.onenoteim_S-1-5-21",
-        "Microsoft Software Printer Driver", true)]
-    [InlineData(@"C:\ci\label.pdf", "Microsoft Print To PDF", false)]
-    [InlineData("USB001", "ZDesigner GX420d", false)]
-    public void Virtual_queues_are_hidden(string port, string driver, bool hidden)
-    {
-        Assert.Equal(hidden, PrinterRules.IsHidden(port, driver));
+        Assert.Equal(hidden, PrinterRules.IsHidden(port));
     }
 
     [Theory]
@@ -55,28 +41,24 @@ public sealed class PrinterRulesTests
     }
 
     [Fact]
-    public void A_queue_is_thermal_when_zpl_or_its_largest_paper_is_label_wide()
+    public void A_label_printer_lists_a_label_sized_paper_and_no_letter_or_a4()
     {
-        Assert.Equal(PrinterKind.Thermal, PrinterRules.KindOf(true, []));
-        Assert.Equal(PrinterKind.Thermal, PrinterRules.KindOf(false, [(1016, 1524), (1016, 2794), (508, 254)]));
-        Assert.Equal(PrinterKind.Other, PrinterRules.KindOf(false, [(1016, 1524), (2159, 2794)]));
-        Assert.Equal(PrinterKind.Other, PrinterRules.KindOf(false, []));
-    }
-
-    [Fact]
-    public void A_zpl_queue_that_reports_no_resolution_is_203_dpi()
-    {
-        Assert.Equal(300, PrinterRules.DpiOf(true, [300]));
-        Assert.Equal(203, PrinterRules.DpiOf(true, []));
-        Assert.Equal(600, PrinterRules.DpiOf(false, [300, 600]));
-        Assert.Equal(0, PrinterRules.DpiOf(false, []));
+        Assert.Equal(PrinterKind.Thermal, PrinterRules.KindOf([(1016, 1524), (508, 254)]));
+        Assert.Equal(PrinterKind.Thermal, PrinterRules.KindOf([(1016, 1524), (2032, 2794)]));
+        Assert.Equal(PrinterKind.Thermal, PrinterRules.KindOf([(1080, 1500)]));
+        Assert.Equal(PrinterKind.Other, PrinterRules.KindOf([(1016, 1524), (2159, 2794)]));
+        Assert.Equal(PrinterKind.Other, PrinterRules.KindOf([(1016, 1524), (2100, 2970)]));
+        Assert.Equal(PrinterKind.Other, PrinterRules.KindOf([(1100, 1500)]));
+        Assert.Equal(PrinterKind.Other, PrinterRules.KindOf([]));
     }
 
     [Theory]
     [InlineData(0u, 0u, 0u, PrinterState.Ready, "")]
     [InlineData(0x400u, 0u, 1u, PrinterState.Busy, "")]
     [InlineData(0u, 0u, 2u, PrinterState.Busy, "")]
-    [InlineData(0x1u | 0x10u, 0u, 0u, PrinterState.Paused, "")]
+    [InlineData(0x1u, 0u, 3u, PrinterState.Paused, "")]
+    [InlineData(0x1u | 0x10u, 0u, 0u, PrinterState.Error, "Out of paper")]
+    [InlineData(0x80u | 0x10u | 0x1u, 0u, 0u, PrinterState.Offline, "")]
     [InlineData(0u, 0x400u, 0u, PrinterState.Offline, "")]
     [InlineData(0x80u, 0u, 0u, PrinterState.Offline, "")]
     [InlineData(0x10u, 0u, 0u, PrinterState.Error, "Out of paper")]

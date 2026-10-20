@@ -2,14 +2,6 @@ namespace NodePrint.Core.Tests;
 
 public sealed class PageLayoutTests
 {
-    [Theory]
-    [InlineData(203, 812, 1218)]
-    [InlineData(300, 1200, 1800)]
-    public void A_label_is_4_by_6_inches_of_dots(int dpi, int width, int length)
-    {
-        Assert.Equal((width, length), PageLayout.LabelDots(dpi));
-    }
-
     [Fact]
     public void A_4_by_6_portrait_page_fills_the_label()
     {

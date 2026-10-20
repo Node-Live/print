@@ -10,9 +10,6 @@ public readonly record struct Placement(int X, int Y, int Width, int Height, boo
 
 public static class PageLayout
 {
-    public const double LabelWidthInches = 4;
-    public const double LabelLengthInches = 6;
-
     public static bool IsLandscape(double pageWidth, double pageHeight) => pageWidth > pageHeight;
 
     /// <summary>A label page: landscape pages turn 90° clockwise, then fit inside the area and centre.</summary>
@@ -27,10 +24,6 @@ public static class PageLayout
     /// <summary>A document page keeps its orientation (the paper is turned to match) and fits inside the area.</summary>
     public static Placement Document(double pageWidth, double pageHeight, int areaWidth, int areaHeight) =>
         Fit(pageWidth, pageHeight, areaWidth, areaHeight, false);
-
-    /// <summary>Label size in dots for a printer resolution: 812 × 1218 at 203 dpi.</summary>
-    public static (int Width, int Length) LabelDots(int dpi) =>
-        ((int)Math.Round(LabelWidthInches * dpi), (int)Math.Round(LabelLengthInches * dpi));
 
     private static Placement Fit(double width, double height, int areaWidth, int areaHeight, bool rotated)
     {

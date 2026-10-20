@@ -10,7 +10,7 @@ namespace NodePrint.Core;
 public static class LocalApi
 {
     public const int Port = 19233;
-    public const long MaxBodyBytes = 50L * 1024 * 1024;
+    public const long MaxBodyBytes = 52_428_800;
 
     public static readonly IReadOnlyList<string> BuiltInOrigins =
         ["https://nrp.node.live", "http://localhost:5173", "http://127.0.0.1:5173"];
@@ -41,28 +41,30 @@ public static class LocalApi
         var request = context.Request;
         var response = context.Response;
         string origin = request.Headers.Origin.ToString();
-        if (origin.Length > 0 && IsAllowedOrigin(origin, service.AllowedOrigins))
-        {
-            response.Headers.AccessControlAllowOrigin = origin;
-            response.Headers.AccessControlAllowMethods = "GET, POST, OPTIONS";
-            response.Headers.AccessControlAllowHeaders = "Content-Type";
-            response.Headers["Access-Control-Allow-Private-Network"] = "true";
-            response.Headers.AccessControlMaxAge = "600";
-        }
-
+        bool fromNode = origin.Length > 0 && IsAllowedOrigin(origin, service.AllowedOrigins);
         try
         {
-            string? allowedMethod = request.Path.Value switch
+            if (origin.Length > 0 && !fromNode) throw ApiError.ForbiddenOrigin(origin);
+            if (fromNode)
             {
-                "/status" or "/printers" => HttpMethods.Get,
-                "/print" => HttpMethods.Post,
-                _ => throw ApiError.NotFound(),
-            };
+                response.Headers.AccessControlAllowOrigin = origin;
+                response.Headers.AccessControlAllowMethods = "GET, POST, OPTIONS";
+                response.Headers.AccessControlAllowHeaders = "Content-Type";
+                response.Headers["Access-Control-Allow-Private-Network"] = "true";
+                response.Headers.AccessControlMaxAge = "600";
+            }
             if (HttpMethods.IsOptions(request.Method))
             {
                 response.StatusCode = StatusCodes.Status204NoContent;
                 return;
             }
+
+            string allowedMethod = request.Path.Value switch
+            {
+                "/status" or "/printers" => HttpMethods.Get,
+                "/print" => HttpMethods.Post,
+                _ => throw ApiError.NotFound(),
+            };
             if (!string.Equals(request.Method, allowedMethod, StringComparison.OrdinalIgnoreCase))
             {
                 throw ApiError.MethodNotAllowed();
@@ -80,6 +82,7 @@ public static class LocalApi
                     await PrintAsync(context, service);
                     break;
             }
+            if (fromNode) service.MarkLinked();
         }
         catch (ApiError error)
         {
@@ -114,9 +117,9 @@ public static class LocalApi
         {
             throw ApiError.TooLarge();
         }
+        var document = await ReadBodyAsync(context.Request, context.RequestAborted);
 
-        var job = await service.PrintAsync(channel, copies, query["title"].ToString(),
-            cancellation => ReadBodyAsync(context.Request, cancellation), context.RequestAborted);
+        var job = await service.PrintAsync(channel, copies, query["title"].ToString(), document);
         await WriteAsync(context.Response, 200, new JobResponse(job), ProtocolJson.Default.JobResponse);
     }
 

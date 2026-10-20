@@ -14,16 +14,16 @@ internal sealed class FakeBackend : IPrintBackend
 
     public Printer? FindPrinter(string id) => Installed.FirstOrDefault(p => p.Id == id);
 
-    public Task<int> PrintAsync(Printer printer, Channel channel, ReadOnlyMemory<byte> pdf, int copies, string title)
+    public Task<int> PrintAsync(Printer printer, Channel channel, ReadOnlyMemory<byte> document, int copies, string title)
     {
-        int pages = Pages(pdf);
-        Jobs.Add((printer.Id, channel, copies, title, pdf.Length));
+        int pages = Pages(document);
+        Jobs.Add((printer.Id, channel, copies, title, document.Length));
         return Task.FromResult(pages);
     }
 
     public static Printer Make(string name, PrinterKind kind = PrinterKind.Other, PrinterState state = PrinterState.Ready,
         bool isDefault = false) =>
-        new(name, name, "", Connection.Usb, kind, [], PrinterLanguage.Driver, 0, state, "", isDefault);
+        new(name, name, "", Connection.Usb, kind, [], 0, state, "", isDefault);
 }
 
 internal sealed class TestHost : IAsyncDisposable

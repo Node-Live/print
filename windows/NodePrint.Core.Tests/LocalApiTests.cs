@@ -61,7 +61,13 @@ public sealed class LocalApiTests
         var document = (await JsonAsync(await host.Client.GetAsync("/status"))).GetProperty("channels").GetProperty("document");
 
         Assert.Equal("missing", document.GetProperty("state").GetString());
-        Assert.Equal(JsonValueKind.Null, document.GetProperty("printer").ValueKind);
+        var placeholder = document.GetProperty("printer");
+        Assert.Equal(("Gone", "Gone", "", "other", "other", 0, 0, "offline", false), (
+            placeholder.GetProperty("id").GetString(), placeholder.GetProperty("name").GetString(),
+            placeholder.GetProperty("model").GetString(), placeholder.GetProperty("connection").GetString(),
+            placeholder.GetProperty("kind").GetString(), placeholder.GetProperty("papers").GetArrayLength(),
+            placeholder.GetProperty("dpi").GetInt32(), placeholder.GetProperty("state").GetString(),
+            placeholder.GetProperty("default").GetBoolean()));
     }
 
     [Fact]
@@ -138,6 +144,18 @@ public sealed class LocalApiTests
     }
 
     [Fact]
+    public async Task Print_decodes_a_plus_in_the_title_as_a_space()
+    {
+        var backend = new FakeBackend();
+        backend.Installed.Add(FakeBackend.Make("Zebra"));
+        await using var host = await TestHost.StartAsync(backend, Chosen(label: "Zebra"));
+
+        await host.Client.PostAsync("/print?channel=label&title=Order+1001%20label", PdfBody());
+
+        Assert.Equal("Order 1001 label", Assert.Single(backend.Jobs).Title);
+    }
+
+    [Fact]
     public async Task Print_rejects_a_body_the_backend_cannot_open()
     {
         var backend = new FakeBackend { Pages = _ => throw ApiError.BadDocument("not a PDF") };
@@ -157,6 +175,20 @@ public sealed class LocalApiTests
 
         await AssertErrorAsync(await host.Client.PostAsync("/print?channel=label", content), HttpStatusCode.RequestEntityTooLarge,
             "TOO_LARGE");
+    }
+
+    [Fact]
+    public async Task Print_accepts_a_body_of_exactly_the_limit()
+    {
+        var backend = new FakeBackend();
+        backend.Installed.Add(FakeBackend.Make("Zebra"));
+        await using var host = await TestHost.StartAsync(backend, Chosen(label: "Zebra"));
+        var content = new StreamContent(new ZeroStream(LocalApi.MaxBodyBytes));
+
+        var response = await host.Client.PostAsync("/print?channel=label", content);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(LocalApi.MaxBodyBytes, Assert.Single(backend.Jobs).Bytes);
     }
 
     [Fact]
@@ -184,8 +216,9 @@ public sealed class LocalApiTests
     [Theory]
     [InlineData(null)]
     [InlineData(PrinterState.Offline)]
+    [InlineData(PrinterState.Error)]
     [InlineData(PrinterState.Paused)]
-    public async Task Print_refuses_a_missing_offline_or_paused_printer(PrinterState? state)
+    public async Task Print_refuses_a_missing_offline_failing_or_paused_printer(PrinterState? state)
     {
         var backend = new FakeBackend();
         if (state is { } s) backend.Installed.Add(FakeBackend.Make("Zebra", state: s));
@@ -197,10 +230,10 @@ public sealed class LocalApiTests
     }
 
     [Fact]
-    public async Task Print_still_queues_on_a_printer_reporting_an_error()
+    public async Task Print_queues_on_a_busy_printer()
     {
         var backend = new FakeBackend();
-        backend.Installed.Add(FakeBackend.Make("Zebra", state: PrinterState.Error));
+        backend.Installed.Add(FakeBackend.Make("Zebra", state: PrinterState.Busy));
         await using var host = await TestHost.StartAsync(backend, Chosen(label: "Zebra"));
 
         var response = await host.Client.PostAsync("/print?channel=label", PdfBody());
@@ -278,19 +311,77 @@ public sealed class LocalApiTests
         Assert.Equal("true", Header(response, "Access-Control-Allow-Private-Network"));
     }
 
-    [Theory]
-    [InlineData("https://evil.example.com")]
-    [InlineData("http://nrp.node.live")]
-    [InlineData("null")]
-    public async Task Other_origins_get_no_cors_headers(string origin)
+    [Fact]
+    public async Task Checks_run_in_the_protocol_order()
     {
         await using var host = await TestHost.StartAsync(new FakeBackend());
-        var request = new HttpRequestMessage(HttpMethod.Get, "/status");
+        var tooLarge = PdfBody("garbage"u8.ToArray());
+        tooLarge.Headers.ContentLength = LocalApi.MaxBodyBytes + 1;
+        var foreign = new HttpRequestMessage(HttpMethod.Post, "/print?copies=0") { Content = PdfBody() };
+        foreign.Headers.Add("Origin", "https://evil.example.com");
+
+        await AssertErrorAsync(await host.Client.SendAsync(foreign), HttpStatusCode.Forbidden, "FORBIDDEN_ORIGIN");
+        await AssertErrorAsync(await host.Client.PostAsync("/print?copies=0", PdfBody()), HttpStatusCode.BadRequest, "BAD_CHANNEL");
+        await AssertErrorAsync(await host.Client.PostAsync("/print?channel=label&copies=0", tooLarge), HttpStatusCode.BadRequest,
+            "BAD_COPIES");
+        await AssertErrorAsync(await host.Client.PostAsync("/print?channel=label", tooLarge), HttpStatusCode.RequestEntityTooLarge,
+            "TOO_LARGE");
+        await AssertErrorAsync(await host.Client.PostAsync("/print?channel=label", PdfBody("garbage"u8.ToArray())),
+            HttpStatusCode.Conflict, "NO_PRINTER");
+    }
+
+    [Theory]
+    [InlineData("GET", "/status", "https://evil.example.com")]
+    [InlineData("OPTIONS", "/print", "https://evil.example.com")]
+    [InlineData("POST", "/print?channel=label", "https://evil.example.com")]
+    [InlineData("POST", "/print?channel=label", "http://nrp.node.live")]
+    [InlineData("POST", "/print?channel=label", "null")]
+    public async Task Other_origins_are_forbidden_and_nothing_is_done(string method, string path, string origin)
+    {
+        var backend = new FakeBackend();
+        backend.Installed.Add(FakeBackend.Make("Zebra"));
+        await using var host = await TestHost.StartAsync(backend, Chosen(label: "Zebra"));
+        var request = new HttpRequestMessage(new HttpMethod(method), path) { Content = PdfBody() };
         request.Headers.Add("Origin", origin);
 
         var response = await host.Client.SendAsync(request);
 
+        await AssertErrorAsync(response, HttpStatusCode.Forbidden, "FORBIDDEN_ORIGIN");
         Assert.DoesNotContain(response.Headers, h => h.Key.StartsWith("Access-Control-", StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(backend.Jobs);
+    }
+
+    [Fact]
+    public async Task A_preflight_on_any_path_is_204()
+    {
+        await using var host = await TestHost.StartAsync(new FakeBackend());
+        var request = new HttpRequestMessage(HttpMethod.Options, "/anything");
+        request.Headers.Add("Origin", "http://localhost:5173");
+
+        var response = await host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal("http://localhost:5173", Header(response, "Access-Control-Allow-Origin"));
+    }
+
+    [Fact]
+    public async Task Only_a_successful_answer_to_a_node_origin_counts_as_linked()
+    {
+        await using var host = await TestHost.StartAsync(new FakeBackend());
+
+        await host.Client.GetAsync("/status");
+        var foreign = new HttpRequestMessage(HttpMethod.Get, "/status");
+        foreign.Headers.Add("Origin", "https://evil.example.com");
+        await host.Client.SendAsync(foreign);
+        var failing = new HttpRequestMessage(HttpMethod.Post, "/print");
+        failing.Headers.Add("Origin", "https://nrp.node.live");
+        await host.Client.SendAsync(failing);
+        Assert.Null(host.Service.LastLinked);
+
+        var node = new HttpRequestMessage(HttpMethod.Get, "/status");
+        node.Headers.Add("Origin", "https://nrp.node.live");
+        await host.Client.SendAsync(node);
+        Assert.NotNull(host.Service.LastLinked);
     }
 
     private static string? Header(HttpResponseMessage response, string name) =>

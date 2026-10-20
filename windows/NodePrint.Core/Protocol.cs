@@ -22,12 +22,6 @@ public enum PrinterKind
     [JsonStringEnumMemberName("other")] Other,
 }
 
-public enum PrinterLanguage
-{
-    [JsonStringEnumMemberName("zpl")] Zpl,
-    [JsonStringEnumMemberName("driver")] Driver,
-}
-
 public enum PrinterState
 {
     [JsonStringEnumMemberName("ready")] Ready,
@@ -62,11 +56,15 @@ public sealed record Printer(
     Connection Connection,
     PrinterKind Kind,
     IReadOnlyList<string> Papers,
-    PrinterLanguage Language,
     int Dpi,
     PrinterState State,
     string StateMessage,
-    bool Default);
+    bool Default)
+{
+    /// <summary>What /status shows for a chosen printer that is no longer installed, so the web can still name it.</summary>
+    public static Printer Missing(string id) =>
+        new(id, id, "", Connection.Other, PrinterKind.Other, [], 0, PrinterState.Offline, "", false);
+}
 
 public sealed record ChannelStatus(Printer? Printer, ChannelState State);
 

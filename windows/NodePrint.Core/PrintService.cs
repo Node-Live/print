@@ -8,9 +8,9 @@ public interface IPrintBackend
     /// <summary>The printer with this id with its current state, or null when it is not installed or hidden.</summary>
     Printer? FindPrinter(string id);
 
-    /// <summary>Hands the job to the OS and returns the page count; throws <see cref="ApiError"/> for
-    /// BAD_DOCUMENT and PRINT_FAILED.</summary>
-    Task<int> PrintAsync(Printer printer, Channel channel, ReadOnlyMemory<byte> pdf, int copies, string title);
+    /// <summary>Opens the PDF, PNG or JPEG, hands the whole job to the OS spooler and returns the page count; throws
+    /// <see cref="ApiError"/> for BAD_DOCUMENT and PRINT_FAILED.</summary>
+    Task<int> PrintAsync(Printer printer, Channel channel, ReadOnlyMemory<byte> document, int copies, string title);
 }
 
 public sealed class PrintService
@@ -21,6 +21,7 @@ public sealed class PrintService
     private readonly SerialQueue labelQueue = new();
     private readonly SerialQueue documentQueue = new();
     private AppConfig config;
+    private long lastLinkedTicks;
 
     public PrintService(IPrintBackend backend, ConfigStore store, AppConfig config)
     {
@@ -67,6 +68,18 @@ public sealed class PrintService
         set => Update(c => c.LaunchAtLogin = value);
     }
 
+    /// <summary>When an allowed NODE origin last got a successful answer, or null when none has yet.</summary>
+    public DateTimeOffset? LastLinked
+    {
+        get
+        {
+            long ticks = Interlocked.Read(ref lastLinkedTicks);
+            return ticks == 0 ? null : new DateTimeOffset(ticks, TimeSpan.Zero);
+        }
+    }
+
+    public void MarkLinked() => Interlocked.Exchange(ref lastLinkedTicks, DateTimeOffset.UtcNow.UtcTicks);
+
     public string? ChosenId(Channel channel)
     {
         lock (gate) return channel == Channel.Label ? config.Channels.Label : config.Channels.Document;
@@ -86,30 +99,30 @@ public sealed class PrintService
         if (id is null) return new ChannelStatus(null, ChannelState.None);
         var printer = backend.FindPrinter(id);
         return printer is null
-            ? new ChannelStatus(null, ChannelState.Missing)
+            ? new ChannelStatus(Printer.Missing(id), ChannelState.Missing)
             : new ChannelStatus(printer, ToChannelState(printer.State));
     }
 
     public StatusResponse Status() => new(AppInfo.Id, AppInfo.Version, AppInfo.Platform,
         new ChannelsStatus(ChannelStatus(Channel.Label), ChannelStatus(Channel.Document)));
 
-    public async Task<JobInfo> PrintAsync(Channel channel, int copies, string? title,
-        Func<CancellationToken, Task<ReadOnlyMemory<byte>>> readBody, CancellationToken cancellation)
+    /// <summary>Queues a job whose body has been received in full: it prints on the printer chosen now, after the
+    /// jobs already queued on its channel.</summary>
+    public async Task<JobInfo> PrintAsync(Channel channel, int copies, string? title, ReadOnlyMemory<byte> document)
     {
         string id = ChosenId(channel) ?? throw ApiError.NoPrinter(channel);
         var printer = backend.FindPrinter(id) ?? throw ApiError.PrinterUnavailable(id, ChannelState.Missing);
-        if (printer.State is PrinterState.Offline or PrinterState.Paused)
+        if (printer.State is PrinterState.Offline or PrinterState.Error or PrinterState.Paused)
         {
-            throw ApiError.PrinterUnavailable(printer.Name, ToChannelState(printer.State));
+            throw ApiError.PrinterUnavailable(printer.Name, ToChannelState(printer.State), printer.StateMessage);
         }
 
         using var turn = (channel == Channel.Label ? labelQueue : documentQueue).Enter();
-        var pdf = await readBody(cancellation);
-        await turn.Ready.WaitAsync(cancellation);
+        await turn.Ready;
         string jobTitle = string.IsNullOrWhiteSpace(title)
             ? channel == Channel.Label ? "NODE label" : "NODE document"
             : title;
-        int pages = await backend.PrintAsync(printer, channel, pdf, copies, jobTitle);
+        int pages = await backend.PrintAsync(printer, channel, document, copies, jobTitle);
         return new JobInfo(channel, printer.Name, pages, copies);
     }
 

@@ -13,7 +13,7 @@ namespace NodePrint.App;
 /// <summary>Finds Microsoft's Windows App Runtime, which the app uses instead of carrying its own copy, and offers to
 /// download and install it when it is missing. Runs before anything else of the Windows App SDK can be used, so it
 /// has only Win32 to show itself with and its own few strings.</summary>
-internal static unsafe class RuntimeSetup
+internal static class RuntimeSetup
 {
     public const string DownloadUrl = "https://aka.ms/windowsappsdk/2.5/latest/windowsappruntimeinstall-x64.exe";
 
@@ -32,7 +32,7 @@ internal static unsafe class RuntimeSetup
         Microsoft.WindowsAppSDK.Release.MajorMinor, Microsoft.WindowsAppSDK.Release.VersionTag,
         new PackageVersion(Microsoft.WindowsAppSDK.Runtime.Version.UInt64), options, out _);
 
-    private static bool AskAndInstall()
+    private static unsafe bool AskAndInstall()
     {
         var text = Text.ForCurrentCulture();
         int clicked = 0;
@@ -64,7 +64,7 @@ internal static unsafe class RuntimeSetup
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
-    private static HRESULT Callback(HWND dialog, uint notification, WPARAM wParam, LPARAM lParam, nint data)
+    private static unsafe HRESULT Callback(HWND dialog, uint notification, WPARAM wParam, LPARAM lParam, nint data)
     {
         switch ((TASKDIALOG_NOTIFICATIONS)notification)
         {
@@ -72,7 +72,7 @@ internal static unsafe class RuntimeSetup
                 Process.Start(new ProcessStartInfo(new string((char*)lParam.Value)) { UseShellExecute = true });
                 break;
             case TASKDIALOG_NOTIFICATIONS.TDN_BUTTON_CLICKED when (int)wParam.Value == InstallButton:
-                if (installing is { IsCompleted: true }) return HRESULT.S_OK;
+                if (installing is { IsCompleted: true }) return (HRESULT)0;
                 if (installing is null)
                 {
                     installing = Task.Run(InstallAsync);
@@ -85,12 +85,12 @@ internal static unsafe class RuntimeSetup
                             (nuint)TASKDIALOG_ELEMENTS.TDE_CONTENT, (nint)progress);
                     }
                 }
-                return HRESULT.S_FALSE;
+                return (HRESULT)1;
             case TASKDIALOG_NOTIFICATIONS.TDN_TIMER when installing is { IsCompleted: true }:
                 PInvoke.SendMessage(dialog, (uint)TASKDIALOG_MESSAGES.TDM_CLICK_BUTTON, InstallButton, 0);
                 break;
         }
-        return HRESULT.S_OK;
+        return (HRESULT)0;
     }
 
     /// <summary>Downloads Microsoft's installer and runs it quietly; null when it worked, else what went wrong.</summary>
@@ -99,7 +99,7 @@ internal static unsafe class RuntimeSetup
         try
         {
             string installer = Path.Combine(Path.GetTempPath(), "WindowsAppRuntimeInstall-x64.exe");
-            var result = PInvoke.URLDownloadToFile(null, DownloadUrl, installer, 0, null);
+            var result = Download(installer);
             if (result.Failed) return Marshal.GetExceptionForHR(result.Value)?.Message ?? $"0x{result.Value:X8}";
             using var process = Process.Start(installer, "--quiet");
             await process.WaitForExitAsync();
@@ -110,6 +110,8 @@ internal static unsafe class RuntimeSetup
             return e.Message;
         }
     }
+
+    private static unsafe HRESULT Download(string path) => PInvoke.URLDownloadToFile(null, DownloadUrl, path, 0, null);
 
     private sealed record Text(string Instruction, string Question, string Install, string Installing, string Failed)
     {

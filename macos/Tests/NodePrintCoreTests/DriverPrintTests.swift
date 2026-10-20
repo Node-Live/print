@@ -8,7 +8,7 @@ import Testing
 @Suite(.enabled(if: !PrinterCatalog.printers().isEmpty, "needs a CUPS print queue"))
 struct DriverPrint {
     let printer = PrinterCatalog.printers().first!
-    let directory = FileManager.default.temporaryDirectory.appending(path: "node-print-driver-\(UUID().uuidString)")
+    let directory = testDirectory.appending(path: "driver-\(UUID().uuidString)", directoryHint: .isDirectory)
 
     init() throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

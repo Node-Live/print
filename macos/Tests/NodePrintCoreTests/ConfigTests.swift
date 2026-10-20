@@ -2,9 +2,20 @@ import Foundation
 import Testing
 @testable import NodePrintCore
 
-func temporaryConfigURL() -> URL {
+/// Everything a test run writes lives under one directory, removed when the run ends.
+let testDirectory: URL = {
+    atexit { try? FileManager.default.removeItem(at: runDirectory()) }
+    return runDirectory()
+}()
+
+private func runDirectory() -> URL {
     FileManager.default.temporaryDirectory
-        .appending(path: "node-print-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        .appending(path: "node-print-tests-\(ProcessInfo.processInfo.processIdentifier)", directoryHint: .isDirectory)
+}
+
+func temporaryConfigURL() -> URL {
+    testDirectory
+        .appending(path: UUID().uuidString, directoryHint: .isDirectory)
         .appending(path: "config.json")
 }
 

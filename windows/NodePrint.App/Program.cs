@@ -11,10 +11,14 @@ public static class Program
     [STAThread]
     private static int Main()
     {
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => ErrorLog.Write(e.ExceptionObject);
+        TaskScheduler.UnobservedTaskException += (_, e) => ErrorLog.Write(e.Exception);
         VelopackApp.Build().Run();
         WinRT.ComWrappersSupport.InitializeComWrappers();
 
+        ErrorLog.Write("trace: main");
         var instance = AppInstance.FindOrRegisterForKey("NODE Print");
+        ErrorLog.Write($"trace: instance current={instance.IsCurrent}");
         if (!instance.IsCurrent)
         {
             // The running copy brings its window up; it may only take the foreground if this one hands it over.

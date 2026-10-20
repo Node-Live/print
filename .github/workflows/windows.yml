@@ -21,13 +21,13 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
       DOTNET_NOLOGO: 1
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('windows/**/*.csproj', 'windows/Directory.Build.props') }}
@@ -54,8 +54,11 @@ jobs:
             --outputDir dist/releases
           Get-ChildItem dist/releases | Format-Table Name, Length -AutoSize
           "{0:N1} MB published" -f ((Get-ChildItem dist/app -Recurse | Measure-Object Length -Sum).Sum / 1MB)
+          Get-ChildItem dist/app -Recurse -File | Sort-Object Length -Descending | Select-Object -First 40 |
+            Format-Table @{ n = 'MB'; e = { '{0:N2}' -f ($_.Length / 1MB) } }, @{ n = 'File'; e = { $_.FullName.Substring((Resolve-Path dist/app).Path.Length) } } -AutoSize
+          (Get-ChildItem dist/app -Recurse -File).Count
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: NodePrint-windows-${{ env.VERSION }}
           path: dist/releases
@@ -66,14 +69,14 @@ jobs:
       - name: Windows printing tests
         run: |
           dotnet test windows/NodePrint.Printing.Tests -c Release --logger "console;verbosity=normal"
-          $report = Get-ChildItem windows/NodePrint.Printing.Tests/bin -Recurse -Filter route-comparison.txt | Select-Object -First 1
-          if ($report) { Get-Content $report; New-Item -ItemType Directory -Force artifacts/routes | Out-Null; Copy-Item (Join-Path $report.DirectoryName '*-*.pdf'), $report artifacts/routes }
+          $report = Get-ChildItem windows/NodePrint.Printing.Tests/bin -Recurse -Filter driver-jobs.txt | Select-Object -First 1
+          if ($report) { Get-Content $report; New-Item -ItemType Directory -Force artifacts/driver | Out-Null; Copy-Item (Join-Path $report.DirectoryName 'driver-*.pdf'), $report artifacts/driver }
 
       - name: Run the app
         if: always()
         run: windows/ci/run-app.ps1
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: NodePrint-windows-run

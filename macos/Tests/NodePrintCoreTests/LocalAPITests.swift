@@ -465,3 +465,30 @@ func samplePDF(pages: Int = 1, size: CGSize = CGSize(width: 288, height: 432)) -
     second.stop()
     #expect(port == nil)
 }
+
+@Suite struct Link {
+    let api = LocalAPI(system: FakePrinting([]), config: ConfigStore(url: temporaryConfigURL(), firstRun: { [] }))
+
+    @Test func countsAnAnswerToANODEPageForAMinute() async {
+        #expect(!api.isLinked())
+        _ = await api.response(to: RequestHead(method: "GET", target: "/status", headers: ["origin": "https://nrp.node.live"]), body: Data())
+        #expect(api.isLinked())
+        #expect(!api.isLinked(at: .now + 61))
+    }
+
+    @Test func countsAPreflightFromANODEPage() {
+        _ = api.response(to: RequestHead(method: "OPTIONS", target: "/print", headers: ["origin": "http://localhost:5173"]), contentLength: 0)
+        #expect(api.isLinked())
+    }
+
+    @Test(arguments: [["origin": "https://evil.example"], [:]])
+    func ignoresOtherOriginsAndRequestsWithoutOne(headers: [String: String]) async {
+        _ = await api.response(to: RequestHead(method: "GET", target: "/status", headers: headers), body: Data())
+        #expect(!api.isLinked())
+    }
+
+    @Test func ignoresARefusedRequest() async {
+        _ = await api.response(to: RequestHead(method: "POST", target: "/print?channel=label", headers: ["origin": "https://nrp.node.live"]), body: Data())
+        #expect(!api.isLinked())
+    }
+}

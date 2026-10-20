@@ -58,11 +58,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let system = SystemPrinting()
         let config = ConfigStore(firstRun: system.printers)
-        let model = AppModel(config: config, system: system)
+        let api = LocalAPI(system: system, config: config)
+        let model = AppModel(config: config, system: system, api: api)
         model.applyLaunchAtLogin()
         self.model = model
 
-        let server = LocalServer(api: LocalAPI(system: system, config: config))
+        let server = LocalServer(api: api)
         server.start { port in
             DispatchQueue.main.async { model.listening = port != nil }
         }

@@ -3,20 +3,25 @@ import SwiftUI
 
 struct MainView: View {
     let model: AppModel
+    /// The channel whose printer list is open, if any.
+    @State private var open: Channel?
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             Color.white
             VStack(alignment: .leading, spacing: 0) {
-                ChannelSection(channel: .label, model: model)
+                ChannelSection(channel: .label, model: model, open: $open)
                     .padding(.top, 66)
-                ChannelSection(channel: .document, model: model)
+                ChannelSection(channel: .document, model: model, open: $open)
                     .padding(.top, 17)
             }
             .padding(.horizontal, Theme.inset)
             TitleCapsule()
                 .frame(maxWidth: .infinity)
                 .position(x: Theme.windowSize.width / 2, y: model.titlebarMidY)
+            LinkStatus(linked: model.linked)
+                .frame(width: Theme.windowSize.width - 20, alignment: .trailing)
+                .position(x: (Theme.windowSize.width - 20) / 2, y: model.titlebarMidY)
             if !model.listening {
                 Text("Port 19233 is in use")
                     .font(.system(size: 11.5, weight: .medium))
@@ -25,11 +30,50 @@ struct MainView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .overlayPreferenceValue(CardFrames.self) { frames in
+            GeometryReader { window in
+                if let open, let anchor = frames[open] {
+                    let card = window[anchor]
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { self.open = nil }
+                    PrinterPanel(channel: open, model: model, card: card, window: window.size, titlebarBottom: model.titlebarMidY + 24) {
+                        self.open = nil
+                    }
+                }
+            }
+        }
         .ignoresSafeArea()
         .environment(\.colorScheme, .light)
+        .onChange(of: open) { if open != nil { model.refresh() } }
     }
 }
 
+/// Where each card sits, so the open list can hang from it.
+struct CardFrames: PreferenceKey {
+    static let defaultValue: [Channel: Anchor<CGRect>] = [:]
+
+    static func reduce(value: inout [Channel: Anchor<CGRect>], nextValue: () -> [Channel: Anchor<CGRect>]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+/// Whether a NODE page has reached the local service within the last minute.
+struct LinkStatus: View {
+    let linked: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(linked ? Theme.green : Theme.gray)
+                .frame(width: 6, height: 6)
+            Text(linked ? "Linked to NODE" : "Waiting for NODE")
+                .font(.system(size: 11.5))
+                .foregroundStyle(linked ? Theme.pillText : Theme.secondary)
+        }
+        .lineLimit(1)
+    }
+}
 struct TitleCapsule: View {
     var body: some View {
         HStack(spacing: 0) {
@@ -82,6 +126,7 @@ struct CapsuleSurface: ViewModifier {
 struct ChannelSection: View {
     let channel: Channel
     let model: AppModel
+    @Binding var open: Channel?
 
     var body: some View {
         let status = model.status(of: channel)
@@ -101,7 +146,7 @@ struct ChannelSection: View {
             .lineLimit(1)
             .padding(.horizontal, 6)
             .frame(height: 16)
-            PrinterCard(channel: channel, status: status, model: model)
+            PrinterCard(channel: channel, status: status, open: $open)
                 .padding(.top, 11)
         }
     }
@@ -126,12 +171,12 @@ struct StateLabel: View {
 struct PrinterCard: View {
     let channel: Channel
     let status: ChannelStatus
-    let model: AppModel
-    @State private var choosing = false
+    @Binding var open: Channel?
 
     var body: some View {
+        let isOpen = open == channel
         Button {
-            choosing.toggle()
+            open = isOpen ? nil : channel
         } label: {
             HStack(spacing: 0) {
                 PrinterTile(channel: channel, state: status.state)
@@ -157,10 +202,10 @@ struct PrinterCard: View {
                 .padding(.leading, 11)
                 Spacer(minLength: 12)
                 if let printer = status.printer, status.state != .missing, let word = printer.connection.word {
-                    ConnectionPill(word: word)
+                    ConnectionPill(word: word, border: isOpen ? Theme.openPillBorder : Theme.pillBorder)
                         .padding(.trailing, 9.5)
                 }
-                Image(systemName: "chevron.down")
+                Image(systemName: isOpen ? "chevron.up" : "chevron.down")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Theme.secondary)
                     .frame(width: 20, height: 20)
@@ -168,16 +213,19 @@ struct PrinterCard: View {
             }
             .frame(height: 60)
             .frame(maxWidth: .infinity)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(isOpen ? .white : Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                if isOpen {
+                    RoundedRectangle(cornerRadius: 19, style: .continuous)
+                        .strokeBorder(Theme.raisedBorder, lineWidth: 1)
+                        .padding(-1)
+                }
+            }
+            .shadow(color: .black.opacity(isOpen ? 0.06 : 0), radius: 12, y: 4)
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
-        // Hangs from the whole card, as wide as it, so the list stays inside the window under the printer it replaces.
-        .popover(isPresented: $choosing, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
-            PrinterList(channel: channel, model: model) { choosing = false }
-                .frame(width: Theme.cardWidth)
-        }
-        .onChange(of: choosing) { if choosing { model.refresh() } }
+        .anchorPreference(key: CardFrames.self, value: .bounds) { [channel: $0] }
     }
 }
 
@@ -210,6 +258,7 @@ struct PrinterTile: View {
 
 struct ConnectionPill: View {
     let word: LocalizedStringKey
+    var border = Theme.pillBorder
 
     var body: some View {
         Text(word)
@@ -218,72 +267,119 @@ struct ConnectionPill: View {
             .padding(.horizontal, 9.5)
             .frame(height: 24)
             .background(.white, in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.pillBorder, lineWidth: 1))
+            .overlay(Capsule().strokeBorder(border, lineWidth: 1))
     }
 }
 
-struct PrinterList: View {
+/// The open printer list: a white panel 6 pt under the card, as wide as it, laid over whatever is below. It opens
+/// upward when there is more room above the card, and scrolls when its rows do not fit.
+struct PrinterPanel: View {
     let channel: Channel
     let model: AppModel
+    let card: CGRect
+    let window: CGSize
+    let titlebarBottom: CGFloat
     let done: () -> Void
 
+    private static let rowHeight: CGFloat = 46
+    private static let padding: CGFloat = 7
+    private static let gap: CGFloat = 6
+    private static let margin: CGFloat = 12
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if model.printers.isEmpty {
-                Text("No printers found")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.secondary)
-                    .padding(10)
-            }
-            ForEach(model.printers) { printer in
-                Button {
-                    model.choose(printer, for: channel)
-                    done()
-                } label: {
-                    PrinterRow(printer: printer, chosen: model.channels[channel] == printer.id)
+        let content = CGFloat(max(model.printers.count, 1)) * Self.rowHeight + 2 * Self.padding
+        let below = window.height - (card.maxY + 1 + Self.gap) - Self.margin
+        let above = card.minY - 1 - Self.gap - titlebarBottom
+        let downward = content <= below || below >= above
+        let height = min(content, downward ? below : above)
+        let top = downward ? card.maxY + 1 + Self.gap : card.minY - 1 - Self.gap - height
+        ScrollView(.vertical) {
+            VStack(spacing: 0) {
+                if model.printers.isEmpty {
+                    Text("No printers found")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.secondary)
+                        .frame(maxWidth: .infinity, minHeight: Self.rowHeight)
                 }
-                .buttonStyle(.plain)
+                ForEach(model.printers) { printer in
+                    Button {
+                        model.choose(printer, for: channel)
+                        done()
+                    } label: {
+                        PanelRow(printer: printer, channel: channel, chosen: model.channels[channel] == printer.id)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
+            .padding(Self.padding)
         }
-        .padding(6)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(width: card.width + 2, height: height)
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 19, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 19, style: .continuous).strokeBorder(Theme.raisedBorder, lineWidth: 1))
+        .shadow(color: .black.opacity(0.1), radius: 16, y: 6)
+        .offset(x: card.minX - 1, y: top)
     }
 }
 
-struct PrinterRow: View {
+struct PanelRow: View {
     let printer: Printer
+    let channel: Channel
     let chosen: Bool
     @State private var hovering = false
 
     var body: some View {
-        let state = ChannelState(printer.state)
-        HStack(spacing: 8) {
-            Image(systemName: "checkmark")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.ink)
-                .opacity(chosen ? 1 : 0)
-                .frame(width: 14)
-            VStack(alignment: .leading, spacing: 1) {
+        HStack(spacing: 0) {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Theme.card)
+                .frame(width: 30, height: 30)
+                .overlay {
+                    Image(systemName: "printer")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.ink)
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    Circle()
+                        .fill(ChannelState(printer.state).dotColor)
+                        .frame(width: 7, height: 7)
+                        .padding(2)
+                        .background(.white, in: Circle())
+                        .offset(x: 2.75, y: 2.75)
+                }
+                .padding(.leading, 8)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: printer.name)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Theme.ink)
-                HStack(spacing: 5) {
-                    if let word = printer.connection.word {
-                        Text(word)
-                        Text(verbatim: "·")
-                    }
-                    Circle().fill(state.dotColor).frame(width: 6, height: 6)
-                    Text(state.word).foregroundStyle(state.textColor)
+                let detail = printer.detail(for: channel)
+                if !detail.isEmpty {
+                    Text(verbatim: detail)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.secondary)
                 }
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.secondary)
             }
             .lineLimit(1)
-            Spacer(minLength: 0)
+            .padding(.leading, 12)
+            Spacer(minLength: 12)
+            if let word = printer.connection.word {
+                Text(word)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.pillText)
+                    .padding(.horizontal, 8.5)
+                    .frame(height: 22)
+                    .background(Theme.card, in: Capsule())
+            }
+            if chosen {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.check)
+                    .padding(.leading, 14.5)
+            }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(hovering ? Theme.card : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.trailing, chosen ? 12 : 10)
+        .frame(height: 46)
+        .background(hovering ? Theme.hover : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
     }

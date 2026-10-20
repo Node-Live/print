@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 public struct RequestHead: Sendable {
     public var method: String
@@ -64,6 +65,7 @@ public final class LocalAPI: Sendable {
     private let system: any PrintSystem
     private let config: ConfigStore
     private let queues: [Channel: DispatchQueue]
+    private let lastLinked = OSAllocatedUnfairLock<Date?>(initialState: nil)
 
     public init(system: any PrintSystem, config: ConfigStore) {
         self.system = system
@@ -74,6 +76,22 @@ public final class LocalAPI: Sendable {
     /// The answer when the request line and headers already decide it, so the body need not be read.
     /// `contentLength` is `nil` for a body of unknown length.
     public func response(to head: RequestHead, contentLength: Int?) -> Response? {
+        let response = earlyResponse(head, contentLength: contentLength)
+        if let response { noteLink(head, response) }
+        return response
+    }
+
+    /// Whether a NODE page (an allowed `Origin`) got a 2xx answer within the last 60 s.
+    public func isLinked(at now: Date = .now) -> Bool {
+        lastLinked.withLock { $0.map { now.timeIntervalSince($0) <= 60 } ?? false }
+    }
+
+    private func noteLink(_ head: RequestHead, _ response: Response) {
+        guard (200 ..< 300).contains(response.status), let origin = head.headers["origin"], allows(origin) else { return }
+        lastLinked.withLock { $0 = .now }
+    }
+
+    private func earlyResponse(_ head: RequestHead, contentLength: Int?) -> Response? {
         if let origin = head.headers["origin"], !allows(origin) {
             return .error(403, "FORBIDDEN_ORIGIN", "\(origin) may not use NODE Print.")
         }
@@ -92,7 +110,9 @@ public final class LocalAPI: Sendable {
 
     public func response(to head: RequestHead, body: Data) async -> Response {
         if let early = response(to: head, contentLength: body.count) { return early }
-        return withCORS(await route(head, body: body), head)
+        let response = withCORS(await route(head, body: body), head)
+        noteLink(head, response)
+        return response
     }
 
     private func allows(_ origin: String) -> Bool {

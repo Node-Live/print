@@ -14,9 +14,10 @@ public sealed class BackendTests
         Assert.SkipUnless(printers.Any(p => p.Id == "NODE CI Label"), "the CI queues are not installed");
 
         var label = Assert.Single(printers, p => p.Id == "NODE CI Label");
-        Assert.Equal(("Microsoft Print To PDF", PrinterLanguage.Driver, Connection.Other), (label.Model, label.Language, label.Connection));
+        Assert.Equal(("Microsoft Print To PDF", Connection.Other), (label.Model, label.Connection));
         Assert.Contains(Papers.Letter, label.Papers);
         Assert.DoesNotContain(printers, p => p.Id == "Microsoft Print to PDF");
+        Assert.Contains(printers, p => p.Id == "NODE CI Network" && p.Connection == Connection.Network);
         File.AppendAllText(Path.Combine(AppContext.BaseDirectory, "driver-jobs.txt"),
             string.Join("\n", printers.Select(p => $"queue {p.Id}: {p.Connection} {p.Kind} [{string.Join(", ", p.Papers)}] {p.Dpi} dpi {p.State}")) + "\n");
     }

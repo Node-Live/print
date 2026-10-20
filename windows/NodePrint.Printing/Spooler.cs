@@ -10,9 +10,9 @@ namespace NodePrint.Printing;
 /// <summary>A print queue as PRINTER_INFO_2 describes it.</summary>
 internal sealed record Queue(string Name, string Driver, string Port, uint Status, uint Attributes, uint Jobs);
 
-/// <summary>The driver's paper sizes (0.1 mm, with the matching DMPAPER ids) and resolutions.</summary>
-internal sealed record Capabilities(IReadOnlyList<(int Width, int Length)> PaperSizes, IReadOnlyList<short> PaperIds,
-    IReadOnlyList<int> Resolutions);
+/// <summary>The driver's paper sizes (0.1 mm, with the matching DMPAPER ids) and its current resolution (0 when it
+/// does not say).</summary>
+internal sealed record Capabilities(IReadOnlyList<(int Width, int Length)> PaperSizes, IReadOnlyList<short> PaperIds, int Dpi);
 
 internal static unsafe class Spooler
 {
@@ -83,11 +83,7 @@ internal static unsafe class Spooler
     {
         var sizes = Read<System.Drawing.Point>(name, port, PRINTER_DEVICE_CAPABILITIES.DC_PAPERSIZE);
         var ids = Read<short>(name, port, PRINTER_DEVICE_CAPABILITIES.DC_PAPERS);
-        var resolutions = Read<(int X, int Y)>(name, port, PRINTER_DEVICE_CAPABILITIES.DC_ENUMRESOLUTIONS);
-        return new Capabilities(
-            [.. sizes.Select(p => (p.X, p.Y))],
-            ids.Length == sizes.Length ? ids : [],
-            [.. resolutions.Select(r => r.X)]);
+        return new Capabilities([.. sizes.Select(p => (p.X, p.Y))], ids.Length == sizes.Length ? ids : [], DevModes.Resolution(name));
     }
 
     /// <summary>The error for a failed call; several winspool and GDI calls set no last error, so there may be no text.</summary>

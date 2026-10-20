@@ -25,8 +25,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\..\testdata\zpl\*.*" LinkBase="zpl" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="Fixtures\*.pdf" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\testdata\zpl\*.pdf" LinkBase="zpl" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures\*.*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -136,15 +136,20 @@ than that height. Content outside the visible box is not drawn.
 
 ### `POST /print?channel=label|document&copies=1&title=…`
 
-Body: the document itself, `Content-Type: application/pdf`, `image/png` or `image/jpeg` (an image is one
-page), at most 52,428,800 bytes (exactly that many is still accepted). `copies` defaults to 1 (1–99). `title`
-is the job name shown in the OS queue; defaults to `NODE label` / `NODE document`.
+Body: either the document itself, `Content-Type: application/pdf`, `image/png` or `image/jpeg` (an image is
+one page), at most 52,428,800 bytes (exactly that many is still accepted); or `Content-Type: application/json`
+with `{"url": "https://…"}`, in which case the app downloads the document itself (http or https only,
+redirects followed, 30 s timeout, the same size limit, the type sniffed from the bytes, not from the URL or
+the response header) and prints it exactly as if the bytes had been posted. The web uses the URL form for
+labels (whose files live on hosts the browser may not read from) and the bytes form for what it already
+holds. `copies` defaults to 1 (1–99). `title` is the job name shown in the OS queue; defaults to
+`NODE label` / `NODE document`.
 
 - `label`: every page is printed as one 4 × 6 in label, portrait. A landscape page (see Page geometry) is
   rotated 90° clockwise first. The page is scaled to fit inside the printable area of the 4 × 6 in paper
   (aspect kept) and centred. The paper is set on the job, not in the printer's defaults; the app reads back
-  the paper the driver settled on and refuses with `PRINT_FAILED` when it is not 4 × 6 in, rather than
-  letting the driver print on whatever it fell back to.
+  the paper the driver settled on and refuses with `PRINT_FAILED` when it is not 4 × 6 in (within 0.08 in on
+  either edge), rather than letting the driver print on whatever it fell back to.
 - `document`: every page is printed on Letter, in the page's own orientation, scaled to fit the printable area
   and centred.
 
@@ -171,6 +176,8 @@ Errors:
 | 400    | `BAD_CHANNEL`         | `channel` is missing or not `label` / `document`       |
 | 400    | `BAD_COPIES`          | `copies` is not 1–99                                   |
 | 400    | `BAD_DOCUMENT`        | the body is not a PDF / PNG / JPEG the app can open, or has 0 pages |
+| 400    | `BAD_URL`             | the JSON body has no `url`, or it is not http(s)                  |
+| 502    | `FETCH_FAILED`        | the URL could not be downloaded (status, timeout, too large; `message` says) |
 | 413    | `TOO_LARGE`           | body over 52,428,800 bytes                             |
 | 409    | `NO_PRINTER`          | the channel has no printer chosen                      |
 | 409    | `PRINTER_UNAVAILABLE` | chosen printer is missing, offline, in error or paused |
@@ -178,7 +185,9 @@ Errors:
 
 Checks run in this order, the first failure answers: origin → channel → copies → size (a `Content-Length`
 over the limit is `413` at once; a body without one is counted as it is read) → `NO_PRINTER` →
-`PRINTER_UNAVAILABLE` → opening the document → printing. `title` is URL-decoded with `+` as a space.
+`PRINTER_UNAVAILABLE` → downloading (URL form) → opening the document → printing. A URL job takes its queue
+place when its JSON body is in; the download happens in the queue, so a batch of URL jobs still prints in
+arrival order. `title` is URL-decoded with `+` as a space.
 
 Anything else is `404` with code `NOT_FOUND` or `405` with code `METHOD_NOT_ALLOWED`, both with a `message`.
 

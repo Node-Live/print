@@ -10,7 +10,6 @@ public sealed partial class PrinterRow : UserControl
     public PrinterRow(Printer printer, bool chosen)
     {
         InitializeComponent();
-        Printer = printer;
         Check.Visibility = chosen ? Visibility.Visible : Visibility.Collapsed;
         NameText.Text = printer.Name;
         ConnectionText.Text = Look.ConnectionKey(printer.Connection) is { } key ? Strings.Get(key) : "";
@@ -20,8 +19,6 @@ public sealed partial class PrinterRow : UserControl
         StateText.Foreground = look.Ink;
         RowButton.Click += (_, _) => Picked?.Invoke(this, printer);
     }
-
-    public Printer Printer { get; }
 
     public event EventHandler<Printer>? Picked;
 }

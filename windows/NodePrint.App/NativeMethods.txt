@@ -5,13 +5,11 @@ DefSubclassProc
 DestroyIcon
 DestroyMenu
 DwmSetWindowAttribute
-GetCursorPos
 GetDpiForWindow
 GetSystemMetricsForDpi
 LoadImage
 PostMessage
 RegisterWindowMessage
-RemoveWindowSubclass
 SetForegroundWindow
 SetWindowSubclass
 Shell_NotifyIcon
@@ -22,9 +20,7 @@ NOTIFYICONDATAW
 NOTIFYICON_VERSION_4
 NIN_SELECT
 WM_APP
-WM_COMMAND
 WM_CONTEXTMENU
-WM_LBUTTONUP
 WM_NCLBUTTONDBLCLK
 WM_NULL
 WM_SYSCOMMAND

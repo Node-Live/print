@@ -39,7 +39,7 @@ public sealed partial class MainWindow : Window
         }
         WindowChrome.Attach(Handle);
 
-        VersionText.Text = "v" + AppInfo.Version;
+        VersionText.Text = AppInfo.Version;
         PortText.Text = Strings.Get("PortInUse");
         ToolTipService.SetToolTip(MinimizeButton, Strings.Get("Minimize"));
         ToolTipService.SetToolTip(CloseButton, Strings.Get("Close"));
@@ -51,7 +51,6 @@ public sealed partial class MainWindow : Window
         {
             FitContent();
             Center();
-            Shadows.Attach(PillShadow, PillShape, (3, 1, 0.05f), (24, 6, 0.07f));
             SetDragRegion();
             Root.XamlRoot.Changed += (_, _) =>
             {

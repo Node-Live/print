@@ -70,7 +70,7 @@ public sealed partial class MainWindow : Window
         Refresh();
     }
 
-    public HWND Handle { get; }
+    internal HWND Handle { get; }
 
     public void ShowAndActivate()
     {

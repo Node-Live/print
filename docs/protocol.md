@@ -81,12 +81,12 @@ what the app and its printers look like now; it never says whether a job printed
 { "printers": [ { …Printer… }, … ] }
 ```
 
-All printers the OS reports, except queues whose port or backend needs a dialog or is not a device: on
-Windows ports `PORTPROMPT:`, `FILE:`, `NUL` and `SHRFAX:` (which is what hides `Microsoft Print to PDF`,
-`Microsoft XPS Document Writer`, OneNote and fax); on macOS queues without a printing backend (the PDF /
-preview style ones). The rule is by port or backend, never by name, so a queue re-pointed at a real port or
-at a local port with a fixed file path (as the CI tests do) is listed. Order: label printers first, then the
-rest, each group by name.
+All printers the OS reports, except virtual ones: queues whose port or backend needs a dialog or is not a
+device (Windows ports `PORTPROMPT:`, `FILE:`, `NUL` and `SHRFAX:`; macOS queues without a printing backend),
+and queues whose name contains `PDF`, `XPS`, `Fax` or `OneNote` (case-insensitive), which catches the
+third-party "print to PDF" drivers that sit on an ordinary port. A queue re-pointed at a real port or at a
+local port with a fixed file path under a name of its own (as the CI tests do) is listed. Order: label
+printers first, then the rest, each group by name.
 
 ### Printer
 

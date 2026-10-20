@@ -16,7 +16,7 @@ public static class Program
     {
         AppDomain.CurrentDomain.UnhandledException += (_, e) => ErrorLog.Write(e.ExceptionObject);
         TaskScheduler.UnobservedTaskException += (_, e) => ErrorLog.Write(e.Exception);
-        VelopackApp.Build().Run();
+        VelopackApp.Build().OnBeforeUninstallFastCallback(_ => LaunchAtLogin.Apply(false)).Run();
         WinRT.ComWrappersSupport.InitializeComWrappers();
 
         bool first = TakeMachine();

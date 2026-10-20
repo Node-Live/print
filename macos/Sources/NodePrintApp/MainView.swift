@@ -51,12 +51,12 @@ struct TitleCapsule: View {
     }
 }
 
-/// Liquid Glass on macOS 26 (the clear variant, so it reads white over the white window); a material capsule before it.
+/// Liquid Glass on macOS 26, tinted white so it reads as the design's white capsule; a material capsule before it.
 struct CapsuleSurface: ViewModifier {
     func body(content: Content) -> some View {
         #if compiler(>=6.2)
         if #available(macOS 26, *) {
-            content.glassEffect(.clear, in: .capsule)
+            content.glassEffect(.regular.tint(.white), in: .capsule)
         } else {
             materialCapsule(content)
         }

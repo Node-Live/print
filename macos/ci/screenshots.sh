@@ -44,5 +44,13 @@ pid=$!
 sleep 5
 kill "$pid" 2> /dev/null || true
 wait "$pid" || true
+swiftc -O "$(dirname "$0")/glass-variants.swift" -o /tmp/glass-variants
+/tmp/glass-variants &
+pid=$!
+sleep 3
+id=$(/tmp/window-id glass-variants || true)
+[ -n "$id" ] && screencapture -o -x -l "$id" "$out/glass-variants.png"
+kill "$pid" 2> /dev/null || true
+wait "$pid" || true
 ls -la "$out"
 

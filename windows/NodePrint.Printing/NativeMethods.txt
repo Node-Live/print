@@ -1,10 +1,7 @@
-AbortDoc
-BI_COMPRESSION
 ClosePrinter
 CLSID_WICImagingFactory
 CoCreateInstance
 CoInitializeEx
-CreateDC
 CreateIC
 CreateStreamOnHGlobal
 D2D1CreateFactory
@@ -14,13 +11,10 @@ DeleteDC
 DeviceCapabilities
 DMORIENT_LANDSCAPE
 DMORIENT_PORTRAIT
-DMPAPER_LETTER
 DMPAPER_USER
 DOC_INFO_1W
 DocumentProperties
-EndDoc
 EndDocPrinter
-EndPage
 EndPagePrinter
 EnumPorts
 EnumPrinters
@@ -43,12 +37,8 @@ PRINTER_INFO_2W
 PTCloseProvider
 PTConvertDevModeToPrintTicket
 PTOpenProvider
-ResetDC
-StartDoc
 StartDocPrinter
-StartPage
 StartPagePrinter
-StretchDIBits
 WritePrinter
 -IPdfRendererNative
 PDF_RENDER_PARAMS

@@ -38,7 +38,7 @@ public sealed class WindowsPrintBackend : IPrintBackend
             else
             {
                 var queue = Spooler.Find(printer.Id) ?? throw new IOException("The printer is no longer installed.");
-                await DriverJob.PrintAsync(printer.Id, CapabilitiesOf(queue), channel, document, copies, title);
+                await Task.Run(() => DriverJob.Print(printer.Id, CapabilitiesOf(queue), channel, document, copies, title));
             }
         }
         catch (Exception e) when (e is not ApiError)

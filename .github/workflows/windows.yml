@@ -52,11 +52,17 @@ jobs:
           vpk pack --packId NodePrint --packVersion $env:VERSION --runtime win-x64 --packDir dist/app --mainExe NodePrint.exe `
             --packTitle "NODE Print" --packAuthors NODE --icon windows/NodePrint.App/Assets/NodePrint.ico `
             --outputDir dist/releases
-          Get-ChildItem dist/releases | Format-Table Name, Length -AutoSize
-          "{0:N1} MB published" -f ((Get-ChildItem dist/app -Recurse | Measure-Object Length -Sum).Sum / 1MB)
-          Get-ChildItem dist/app -Recurse -File | Sort-Object Length -Descending | Select-Object -First 40 |
-            Format-Table @{ n = 'MB'; e = { '{0:N2}' -f ($_.Length / 1MB) } }, @{ n = 'File'; e = { $_.FullName.Substring((Resolve-Path dist/app).Path.Length) } } -AutoSize
-          (Get-ChildItem dist/app -Recurse -File).Count
+          Get-ChildItem dist/releases | Format-Table Name, @{ n = 'MB'; e = { '{0:N2}' -f ($_.Length / 1MB) } } -AutoSize
+          windows/ci/size-report.ps1 dist/app
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [IO.Compression.ZipFile]::OpenRead((Resolve-Path dist/releases/NodePrint-win-Portable.zip).Path).Entries |
+            Sort-Object Length -Descending | Select-Object -First 6 | Format-Table FullName, Length, CompressedLength -AutoSize
+
+      - name: Size comparison
+        run: |
+          dotnet publish windows/NodePrint.App -c Release -p:Platform=x64 -p:WindowsAppSDKSelfContained=true -o dist/app-self-contained
+          windows/ci/size-report.ps1 dist/app-self-contained
+          windows/ci/size-experiments.ps1
 
       - uses: actions/upload-artifact@v7
         with:
@@ -65,6 +71,13 @@ jobs:
 
       - name: Printers
         run: windows/ci/printers.ps1
+
+      - name: Windows App Runtime
+        run: |
+          Invoke-WebRequest https://aka.ms/windowsappsdk/2.5/latest/windowsappruntimeinstall-x64.exe -OutFile $env:RUNNER_TEMP/WindowsAppRuntimeInstall-x64.exe
+          & $env:RUNNER_TEMP/WindowsAppRuntimeInstall-x64.exe --quiet
+          "installer exit code $LASTEXITCODE"
+          Get-AppxPackage Microsoft.WindowsAppRuntime.2* | Format-Table Name, Version, Architecture -AutoSize
 
       - name: Windows printing tests
         run: |

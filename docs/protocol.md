@@ -143,8 +143,8 @@ is the job name shown in the OS queue; defaults to `NODE label` / `NODE document
 - `label`: every page is printed as one 4 × 6 in label, portrait. A landscape page (see Page geometry) is
   rotated 90° clockwise first. The page is scaled to fit inside the printable area of the 4 × 6 in paper
   (aspect kept) and centred. The paper is set on the job, not in the printer's defaults; the app reads back
-  the paper the driver settled on and refuses with `PRINT_FAILED` when it is not 4 × 6 in, rather than
-  letting the driver print on whatever it fell back to.
+  the paper the driver settled on and refuses with `PRINT_FAILED` when it is not 4 × 6 in (within 0.08 in on
+  either edge), rather than letting the driver print on whatever it fell back to.
 - `document`: every page is printed on Letter, in the page's own orientation, scaled to fit the printable area
   and centred.
 

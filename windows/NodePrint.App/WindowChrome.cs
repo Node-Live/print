@@ -6,7 +6,7 @@ using Windows.Win32.Graphics.Dwm;
 
 namespace NodePrint.App;
 
-/// <summary>The Win32 side of the main window: its message hooks, dragging by the top strip, rounded corners.</summary>
+/// <summary>The Win32 side of the main window: its message hooks and rounded corners.</summary>
 internal static unsafe class WindowChrome
 {
     private static readonly List<Func<uint, WPARAM, LPARAM, bool>> Hooks = [];
@@ -21,12 +21,6 @@ internal static unsafe class WindowChrome
 
     /// <summary>Runs on every message to the window; returning true swallows it.</summary>
     public static void AddHook(Func<uint, WPARAM, LPARAM, bool> hook) => Hooks.Add(hook);
-
-    public static void BeginDrag(HWND window)
-    {
-        PInvoke.ReleaseCapture();
-        PInvoke.SendMessage(window, PInvoke.WM_NCLBUTTONDOWN, PInvoke.HTCAPTION, 0);
-    }
 
     public static double Scale(HWND window) => PInvoke.GetDpiForWindow(window) / 96.0;
 

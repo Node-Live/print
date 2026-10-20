@@ -6,12 +6,7 @@
     xmlns:local="using:NodePrint.App">
 
     <Grid x:Name="Root" Width="520" Height="372" HorizontalAlignment="Left" VerticalAlignment="Top">
-        <Border
-            x:Name="DragStrip"
-            Height="58"
-            VerticalAlignment="Top"
-            Background="Transparent"
-            PointerPressed="OnDragStripPressed" />
+        <Border x:Name="DragStrip" Height="58" VerticalAlignment="Top" />
 
         <Grid
             HorizontalAlignment="Center"
@@ -91,7 +86,7 @@
             <Button x:Name="CloseButton" Style="{StaticResource CloseCaptionButtonStyle}" Content="&#xE8BB;" Click="OnClose" />
         </StackPanel>
 
-        <local:ChannelSection x:Name="LabelSection" Margin="20,68.5,20,0" VerticalAlignment="Top" />
-        <local:ChannelSection x:Name="DocumentSection" Margin="20,172.5,20,0" VerticalAlignment="Top" />
+        <local:ChannelSection x:Name="LabelSection" Margin="20,68,20,0" VerticalAlignment="Top" />
+        <local:ChannelSection x:Name="DocumentSection" Margin="20,172,20,0" VerticalAlignment="Top" />
     </Grid>
 </Window>

@@ -11,9 +11,7 @@ GetSystemMetricsForDpi
 LoadImage
 PostMessage
 RegisterWindowMessage
-ReleaseCapture
 RemoveWindowSubclass
-SendMessage
 SetForegroundWindow
 SetWindowSubclass
 Shell_NotifyIcon
@@ -28,8 +26,6 @@ WM_COMMAND
 WM_CONTEXTMENU
 WM_LBUTTONUP
 WM_NCLBUTTONDBLCLK
-WM_NCLBUTTONDOWN
 WM_NULL
 WM_SYSCOMMAND
-HTCAPTION
 SC_MAXIMIZE

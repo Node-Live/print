@@ -53,6 +53,7 @@ public static class Screen {
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern void mouse_event(int flags, int dx, int dy, int data, IntPtr extra);
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
     delegate bool EnumProc(IntPtr hwnd, IntPtr data);
     [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc callback, IntPtr data);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
@@ -100,9 +101,13 @@ $width = $rect.Right - $rect.Left; $height = $rect.Bottom - $rect.Top
 Save-Screen $rect.Left $rect.Top $width $height (Join-Path $Out 'main-window.png')
 Save-Screen ($rect.Left - 40) ($rect.Top - 40) ($width + 80) ($height + 80) (Join-Path $Out 'main-window-frame.png')
 
-# The label card's centre: 20 + 240 across, 92 + 30 down, in window DIPs.
+# The label card's centre: 20 + 240 across, 92 + 30 down, in DIPs from the client area inside the 1px frame.
 $scale = [Screen]::GetDpiForWindow($window) / 96
-[Screen]::SetCursorPos($rect.Left + [int](260 * $scale), $rect.Top + [int](122 * $scale)) | Out-Null
+foreach ($point in @(@(100, 20, 'drag strip'), @(497, 16, 'close button'), @(260, 122, 'label card'))) {
+    $x = $rect.Left + 1 + [int]($point[0] * $scale); $y = $rect.Top + 1 + [int]($point[1] * $scale)
+    "hit test at $($point[2]): $([Screen]::SendMessage($window, 0x84, [IntPtr]::Zero, [IntPtr](($y -shl 16) -bor $x)))"
+}
+[Screen]::SetCursorPos($rect.Left + 1 + [int](260 * $scale), $rect.Top + 1 + [int](122 * $scale)) | Out-Null
 Start-Sleep -Milliseconds 300
 [Screen]::mouse_event(0x2, 0, 0, 0, [IntPtr]::Zero); [Screen]::mouse_event(0x4, 0, 0, 0, [IntPtr]::Zero)
 Start-Sleep -Seconds 2
@@ -141,4 +146,34 @@ $preflight = Invoke-WebRequest -Method Options -Uri "$api/print?channel=label" -
 if ($preflight.StatusCode -ne 204) { $failures.Add('preflight failed') }
 
 Stop-Process -Id $process.Id
+
+# The other card states: a chosen printer that is gone, and nothing chosen.
+@{ channels = @{ label = 'Gone Printer'; document = $null }; allowedOrigins = @(); launchAtLogin = $false } |
+    ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $configDir 'config.json')
+$process = Start-Process $App -PassThru
+Start-Sleep -Seconds 6
+$window = [IntPtr]::Zero
+[Screen]::Describe([uint32]$process.Id, [ref] $window) | Out-Null
+if ($window -ne [IntPtr]::Zero) {
+    [Screen]::SetForegroundWindow($window) | Out-Null
+    Start-Sleep -Seconds 2
+    [Screen]::DwmGetWindowAttribute($window, 9, [ref] $rect, 16) | Out-Null
+    Save-Screen $rect.Left $rect.Top ($rect.Right - $rect.Left) ($rect.Bottom - $rect.Top) (Join-Path $Out 'states.png')
+}
+Stop-Process -Id $process.Id
+
+# Candidate Segoe Fluent Icons glyphs, drawn by the system font.
+$glyphs = 'E8A5', 'E7C3', 'E9F9', 'F106', 'EFDA', 'E8E5', 'E9A4', 'E8EC', 'E70D', 'E96E', 'E972', 'E921', 'E8BB', 'E73E'
+$strip = New-Object System.Drawing.Bitmap (80 * $glyphs.Count), 90
+$graphics = [System.Drawing.Graphics]::FromImage($strip)
+$graphics.Clear([System.Drawing.Color]::White)
+$graphics.TextRenderingHint = 'AntiAliasGridFit'
+$font = New-Object System.Drawing.Font 'Segoe Fluent Icons', 28, ([System.Drawing.GraphicsUnit]::Pixel)
+$label = New-Object System.Drawing.Font 'Segoe UI', 11, ([System.Drawing.GraphicsUnit]::Pixel)
+for ($i = 0; $i -lt $glyphs.Count; $i++) {
+    $graphics.DrawString([string][char][Convert]::ToInt32($glyphs[$i], 16), $font, [System.Drawing.Brushes]::Black, (80 * $i + 20), 10)
+    $graphics.DrawString($glyphs[$i], $label, [System.Drawing.Brushes]::Gray, (80 * $i + 22), 66)
+}
+$strip.Save((Join-Path $Out 'glyphs.png'))
+
 if ($failures.Count -gt 0) { throw ($failures -join '; ') }

@@ -4,7 +4,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml.Media;
 using NodePrint.Core;
 using Windows.Graphics;
@@ -33,8 +33,10 @@ public sealed partial class MainWindow : Window
         {
             presenter.IsResizable = false;
             presenter.IsMaximizable = false;
-            presenter.SetBorderAndTitleBar(true, false);
         }
+        // The top of the window is ours: no system caption buttons, the strip around the pill drags the window.
+        AppWindow.TitleBar.ExtendsContentIntoTitleBar = true;
+        AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Collapsed;
         WindowChrome.Attach(Handle);
 
         // Mica shows through a light veil so the cards keep the design's contrast; without Mica the window is white.
@@ -49,7 +51,12 @@ public sealed partial class MainWindow : Window
         DocumentSection.Setup(Channel.Document, service);
         LabelSection.Chosen += Refresh;
         DocumentSection.Chosen += Refresh;
-        Root.Loaded += (_, _) => Shadows.Attach(PillShadow, PillShape, blur: 16, offsetY: 3, opacity: 0.10f);
+        Root.Loaded += (_, _) =>
+        {
+            Shadows.Attach(PillShadow, PillShape, blur: 16, offsetY: 3, opacity: 0.10f);
+            SetDragRegion();
+            Root.XamlRoot.Changed += (_, _) => SetDragRegion();
+        };
 
         AppWindow.Closing += (_, args) =>
         {
@@ -113,9 +120,14 @@ public sealed partial class MainWindow : Window
             area.Y + (area.Height - AppWindow.Size.Height) / 2));
     }
 
-    private void OnDragStripPressed(object sender, PointerRoutedEventArgs e)
+    private void SetDragRegion()
     {
-        if (e.GetCurrentPoint(DragStrip).Properties.IsLeftButtonPressed) WindowChrome.BeginDrag(Handle);
+        double scale = Root.XamlRoot.RasterizationScale;
+        var captionButtons = MinimizeButton.ActualWidth + CloseButton.ActualWidth;
+        InputNonClientPointerSource.GetForWindowId(AppWindow.Id).SetRegionRects(NonClientRegionKind.Caption,
+        [
+            new RectInt32(0, 0, (int)Math.Round((ContentWidth - captionButtons) * scale), (int)Math.Round(DragStrip.ActualHeight * scale)),
+        ]);
     }
 
     private void OnMinimize(object sender, RoutedEventArgs e)

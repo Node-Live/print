@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="NodePrint.App.PrinterRow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Button x:Name="RowButton" Style="{StaticResource PrinterRowStyle}" Height="45" Padding="0">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="30.5" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <FontIcon
+                x:Name="Check"
+                Glyph="&#xE73E;"
+                FontFamily="{StaticResource IconFont}"
+                FontSize="12"
+                Foreground="{StaticResource InkBrush}"
+                Margin="10,0,0,0"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center"
+                Visibility="Collapsed" />
+            <StackPanel Grid.Column="1" Spacing="3" Margin="0,0,10,0" VerticalAlignment="Center">
+                <TextBlock
+                    x:Name="NameText"
+                    FontSize="13"
+                    Foreground="{StaticResource InkBrush}"
+                    TextTrimming="CharacterEllipsis" />
+                <StackPanel Orientation="Horizontal" Spacing="5">
+                    <TextBlock x:Name="ConnectionText" FontSize="11" Foreground="{StaticResource SecondaryInkBrush}" />
+                    <TextBlock x:Name="Separator" Text="·" FontSize="11" Foreground="{StaticResource SecondaryInkBrush}" />
+                    <Ellipse x:Name="StateDot" Width="6" Height="6" VerticalAlignment="Center" />
+                    <TextBlock x:Name="StateText" FontSize="11" />
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Button>
+</UserControl>

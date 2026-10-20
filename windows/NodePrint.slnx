@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="NodePrint.App/NodePrint.App.csproj" />
+  <Project Path="NodePrint.Core.Tests/NodePrint.Core.Tests.csproj" />
+  <Project Path="NodePrint.Core/NodePrint.Core.csproj" />
+  <Project Path="NodePrint.Printing.Tests/NodePrint.Printing.Tests.csproj" />
+  <Project Path="NodePrint.Printing/NodePrint.Printing.csproj" />
+</Solution>

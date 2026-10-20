@@ -1,0 +1,89 @@
+name: windows
+
+on:
+  push:
+    branches: [feat/windows, main]
+    paths: ['windows/**', 'docs/protocol.md', 'testdata/**', '.github/workflows/windows.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('windows/**/*.csproj', 'windows/Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Version
+        run: |
+          $version = dotnet msbuild windows/NodePrint.Core/NodePrint.Core.csproj -getProperty:Version
+          "VERSION=$version" >> $env:GITHUB_ENV
+          "NODE Print $version"
+
+      - name: Core tests
+        run: dotnet test windows/NodePrint.Core.Tests -c Release
+
+      - name: Publish
+        run: dotnet publish windows/NodePrint.App -c Release -p:Platform=x64 -o dist/app
+
+      - name: Package
+        run: |
+          dotnet tool install -g vpk --version 1.2.161
+          # Signing goes here once Azure Trusted Signing is set up: vpk pack ... --azureTrustedSignFile <metadata.json>
+          vpk pack --packId NodePrint --packVersion $env:VERSION --runtime win-x64 --packDir dist/app --mainExe NodePrint.exe `
+            --packTitle "NODE Print" --packAuthors NODE --icon windows/NodePrint.App/Assets/NodePrint.ico `
+            --outputDir dist/releases
+          Get-ChildItem dist/releases | Format-Table Name, @{ n = 'MB'; e = { '{0:N2}' -f ($_.Length / 1MB) } } -AutoSize
+          windows/ci/size-report.ps1 dist/app
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [IO.Compression.ZipFile]::OpenRead((Resolve-Path dist/releases/NodePrint-win-Portable.zip).Path).Entries |
+            Sort-Object Length -Descending | Select-Object -First 6 | Format-Table FullName, Length, CompressedLength -AutoSize
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: NodePrint-windows-${{ env.VERSION }}
+          path: dist/releases
+
+      - name: Printers
+        run: windows/ci/printers.ps1
+
+      - name: Windows printing tests
+        run: |
+          dotnet test windows/NodePrint.Printing.Tests -c Release --logger "console;verbosity=normal"
+          $report = Get-ChildItem windows/NodePrint.Printing.Tests/bin -Recurse -Filter driver-jobs.txt | Select-Object -First 1
+          if ($report) { Get-Content $report; New-Item -ItemType Directory -Force artifacts/driver | Out-Null; Copy-Item (Join-Path $report.DirectoryName 'driver-*.pdf'), $report artifacts/driver }
+
+      - name: Run the app
+        if: always()
+        run: windows/ci/run-app.ps1
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: NodePrint-windows-screenshots
+          path: artifacts/run/design-*.png
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: NodePrint-windows-run
+          path: artifacts

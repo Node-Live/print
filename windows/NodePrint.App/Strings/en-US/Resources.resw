@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="LabelPrinter" xml:space="preserve">
+    <value>Label printer</value>
+  </data>
+  <data name="LabelPrinterDetail" xml:space="preserve">
+    <value>Shipping labels · 4 × 6 in</value>
+  </data>
+  <data name="DocumentPrinter" xml:space="preserve">
+    <value>Document printer</value>
+  </data>
+  <data name="DocumentPrinterDetail" xml:space="preserve">
+    <value>Pick sheets &amp; packing slips · Letter</value>
+  </data>
+  <data name="StateReady" xml:space="preserve">
+    <value>Ready</value>
+  </data>
+  <data name="StateBusy" xml:space="preserve">
+    <value>Printing</value>
+  </data>
+  <data name="StatePaused" xml:space="preserve">
+    <value>Paused</value>
+  </data>
+  <data name="StateOffline" xml:space="preserve">
+    <value>Offline</value>
+  </data>
+  <data name="StateError" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="StateMissing" xml:space="preserve">
+    <value>Not found</value>
+  </data>
+  <data name="StateNone" xml:space="preserve">
+    <value>No printer</value>
+  </data>
+  <data name="Thermal" xml:space="preserve">
+    <value>Thermal</value>
+  </data>
+  <data name="ChoosePrinter" xml:space="preserve">
+    <value>Choose a printer</value>
+  </data>
+  <data name="ConnectionUsb" xml:space="preserve">
+    <value>USB</value>
+  </data>
+  <data name="ConnectionNetwork" xml:space="preserve">
+    <value>Network</value>
+  </data>
+  <data name="ConnectionBluetooth" xml:space="preserve">
+    <value>Bluetooth</value>
+  </data>
+  <data name="Paper4x6" xml:space="preserve">
+    <value>4 × 6 in</value>
+  </data>
+  <data name="PaperLetter" xml:space="preserve">
+    <value>Letter</value>
+  </data>
+  <data name="NoPrinters" xml:space="preserve">
+    <value>No printers found</value>
+  </data>
+  <data name="TrayOpen" xml:space="preserve">
+    <value>Open NODE Print</value>
+  </data>
+  <data name="TrayLaunchAtLogin" xml:space="preserve">
+    <value>Launch at login</value>
+  </data>
+  <data name="TrayQuit" xml:space="preserve">
+    <value>Quit</value>
+  </data>
+  <data name="Minimize" xml:space="preserve">
+    <value>Minimize</value>
+  </data>
+  <data name="Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="PortInUse" xml:space="preserve">
+    <value>Port 19233 is in use</value>
+  </data>
+</root>

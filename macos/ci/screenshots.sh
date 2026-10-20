@@ -2,7 +2,7 @@
 # Starts the packed app in each window style and language on a fresh config and captures the real window
 # (title bar and materials included) into $2/<style>/.
 set -euo pipefail
-app=$1
+app="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 mkdir -p "$2"
 out=$(cd "$2" && pwd)
 crash_reports() {

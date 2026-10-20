@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace NodePrint.Core;
 
 public sealed class ApiError(int status, string code, string message) : Exception(message)
@@ -21,10 +23,11 @@ public sealed class ApiError(int status, string code, string message) : Exceptio
         new(400, "BAD_URL", "The JSON body needs a url that starts with http:// or https://.");
 
     public static ApiError FetchFailed(Uri url, string detail) =>
-        new(502, "FETCH_FAILED", $"{url} could not be downloaded: {detail}");
+        new(502, "FETCH_FAILED", $"{url.OriginalString} could not be downloaded: {detail}");
 
     public static ApiError TooLarge() =>
-        new(413, "TOO_LARGE", $"The document is larger than {LocalApi.MaxBodyBytes:N0} bytes.");
+        new(413, "TOO_LARGE",
+            string.Create(CultureInfo.InvariantCulture, $"The document is larger than {LocalApi.MaxBodyBytes:N0} bytes."));
 
     public static ApiError NoPrinter(Channel channel) =>
         new(409, "NO_PRINTER", $"No {ChannelName(channel)} printer is chosen in NODE Print.");
@@ -42,6 +45,9 @@ public sealed class ApiError(int status, string code, string message) : Exceptio
 
     public static ApiError PrintFailed(string printer, string detail) =>
         new(500, "PRINT_FAILED", $"The printer \"{printer}\" refused the job: {detail}");
+
+    /// <summary>Anything else that went wrong, so the web still gets an answer it can read.</summary>
+    public static ApiError Unexpected(Exception error) => new(500, "PRINT_FAILED", error.Message);
 
     public static ApiError NotFound() => new(404, "NOT_FOUND", "Not found.");
 

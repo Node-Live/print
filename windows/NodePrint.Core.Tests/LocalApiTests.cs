@@ -364,6 +364,20 @@ public sealed class LocalApiTests
         Assert.Equal("http://localhost:5173", Header(response, "Access-Control-Allow-Origin"));
     }
 
+    [Fact]
+    public async Task An_unexpected_failure_still_answers_in_json_with_the_cors_headers()
+    {
+        var backend = new FakeBackend { Failure = new IOException("EnumPrinters: The RPC server is unavailable.") };
+        await using var host = await TestHost.StartAsync(backend);
+        var request = new HttpRequestMessage(HttpMethod.Get, "/printers");
+        request.Headers.Add("Origin", "https://nrp.node.live");
+
+        var response = await host.Client.SendAsync(request);
+
+        await AssertErrorAsync(response, HttpStatusCode.InternalServerError, "PRINT_FAILED");
+        Assert.Equal("https://nrp.node.live", Header(response, "Access-Control-Allow-Origin"));
+    }
+
     private static string? Header(HttpResponseMessage response, string name) =>
         response.Headers.TryGetValues(name, out var values) ? string.Join(",", values) : null;
 

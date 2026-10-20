@@ -90,6 +90,17 @@ public sealed class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void A_first_run_that_cannot_see_the_printers_writes_nothing()
+    {
+        var backend = new FakeBackend { Failure = new IOException("EnumPrinters: The RPC server is unavailable.") };
+
+        var service = PrintService.Open(backend, Store);
+
+        Assert.Null(service.ChosenId(Channel.Label));
+        Assert.Null(Store.Load());
+    }
+
+    [Fact]
     public void Opening_with_a_config_keeps_the_user_choice()
     {
         Store.Save(new AppConfig());

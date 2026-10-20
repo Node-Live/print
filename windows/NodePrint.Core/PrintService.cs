@@ -44,7 +44,17 @@ public sealed class PrintService
         }
         if (config is null)
         {
-            config = new AppConfig { Channels = FirstRunChoice(backend.GetPrinters()) };
+            IReadOnlyList<Printer> printers;
+            try
+            {
+                printers = backend.GetPrinters();
+            }
+            catch (IOException)
+            {
+                // The spooler is not running; the first-run pick waits for a start that can see the printers.
+                return new PrintService(backend, store, new AppConfig());
+            }
+            config = new AppConfig { Channels = FirstRunChoice(printers) };
             store.Save(config);
         }
         return new PrintService(backend, store, config);

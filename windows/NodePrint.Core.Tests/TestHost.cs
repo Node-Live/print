@@ -13,7 +13,10 @@ internal sealed class FakeBackend : IPrintBackend
     /// <summary>Runs as a job starts printing, before it is recorded; a test can hold a job here.</summary>
     public Func<ReadOnlyMemory<byte>, Task> Starting { get; set; } = _ => Task.CompletedTask;
 
-    public IReadOnlyList<Printer> GetPrinters() => Installed;
+    /// <summary>Thrown from GetPrinters, as when the spooler is not running.</summary>
+    public Exception? Failure { get; set; }
+
+    public IReadOnlyList<Printer> GetPrinters() => Failure is null ? Installed : throw Failure;
 
     public Printer? FindPrinter(string id) => Installed.FirstOrDefault(p => p.Id == id);
 

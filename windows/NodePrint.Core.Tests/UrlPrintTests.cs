@@ -37,6 +37,12 @@ public sealed class UrlPrintTests : IAsyncLifetime
                 case "/redirect":
                     context.Response.Redirect("/label.pdf");
                     break;
+                case "/cut":
+                    context.Response.ContentLength = 1000;
+                    await context.Response.Body.WriteAsync(Pdf);
+                    await context.Response.Body.FlushAsync();
+                    context.Abort();
+                    break;
                 case "/huge":
                     context.Response.ContentLength = LocalApi.MaxBodyBytes + 1;
                     await context.Response.Body.WriteAsync(new byte[1024]);
@@ -106,15 +112,22 @@ public sealed class UrlPrintTests : IAsyncLifetime
 
     [Theory]
     [InlineData("/missing")]
+    [InlineData("/cut")]
     [InlineData("/huge")]
     public async Task A_download_that_fails_or_is_too_large_is_fetch_failed(string path)
     {
         var backend = Backend();
         await using var host = await TestHost.StartAsync(backend, Chosen());
+        var request = new HttpRequestMessage(HttpMethod.Post, "/print?channel=label")
+        {
+            Content = JsonContent.Create(new { url = Base + path }),
+        };
+        request.Headers.Add("Origin", "https://nrp.node.live");
 
-        var response = await host.Client.PostAsync("/print?channel=label", JsonContent.Create(new { url = Base + path }));
+        var response = await host.Client.SendAsync(request);
 
         Assert.Equal((HttpStatusCode.BadGateway, "FETCH_FAILED"), (response.StatusCode, await CodeAsync(response)));
+        Assert.True(response.Headers.Contains("Access-Control-Allow-Origin"));
         Assert.Empty(backend.Jobs);
     }
 

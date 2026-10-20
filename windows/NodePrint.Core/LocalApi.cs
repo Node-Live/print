@@ -85,8 +85,9 @@ public static class LocalApi
                     break;
             }
         }
-        catch (ApiError error)
+        catch (Exception e) when (!context.RequestAborted.IsCancellationRequested)
         {
+            var error = e as ApiError ?? ApiError.Unexpected(e);
             if (!response.HasStarted)
             {
                 await WriteAsync(response, error.Status, new ErrorResponse(new ErrorDetail(error.Code, error.Message)),

@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace NodePrint.Core;
 
 /// <summary>Downloads the document a URL print job names: http or https, redirects followed, 30 s for the whole
@@ -5,6 +7,9 @@ namespace NodePrint.Core;
 public static class UrlFetcher
 {
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
+
+    private static readonly string TooLarge =
+        string.Create(CultureInfo.InvariantCulture, $"it is larger than {LocalApi.MaxBodyBytes:N0} bytes.");
 
     private static readonly HttpClient Client = new(new SocketsHttpHandler { AllowAutoRedirect = true })
     {
@@ -29,7 +34,7 @@ public static class UrlFetcher
             }
             if (response.Content.Headers.ContentLength > LocalApi.MaxBodyBytes)
             {
-                throw ApiError.FetchFailed(url, $"it is larger than {LocalApi.MaxBodyBytes:N0} bytes.");
+                throw ApiError.FetchFailed(url, TooLarge);
             }
             await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
             var body = new MemoryStream();
@@ -39,7 +44,7 @@ public static class UrlFetcher
             {
                 if (body.Length + read > LocalApi.MaxBodyBytes)
                 {
-                    throw ApiError.FetchFailed(url, $"it is larger than {LocalApi.MaxBodyBytes:N0} bytes.");
+                    throw ApiError.FetchFailed(url, TooLarge);
                 }
                 body.Write(chunk, 0, read);
             }
@@ -50,6 +55,10 @@ public static class UrlFetcher
             throw ApiError.FetchFailed(url, $"no complete answer within {Timeout.TotalSeconds:0} s.");
         }
         catch (HttpRequestException e)
+        {
+            throw ApiError.FetchFailed(url, e.Message);
+        }
+        catch (IOException e)
         {
             throw ApiError.FetchFailed(url, e.Message);
         }

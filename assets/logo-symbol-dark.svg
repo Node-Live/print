@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="4096" height="4096" role="img" aria-labelledby="title desc">
+  <title id="title">Node mark logo</title>
+  <desc id="desc">A transparent-background vector logo with seven circular nodes connected by dark navy and gray strokes.</desc>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Outer dark frame -->
+    <path d="M256 48 L80 152 L80 360 L256 464 L432 360 L432 152 Z" stroke="#0b1624" stroke-width="31"/>
+
+    <!-- Inner gray connections -->
+    <path d="M256 48 L256 464" stroke="#5f6873" stroke-width="16"/>
+    <path d="M80 152 L256 256 L432 152" stroke="#5f6873" stroke-width="16"/>
+    <path d="M80 360 L256 256 L432 360" stroke="#5f6873" stroke-width="16"/>
+  </g>
+
+  <!-- Nodes -->
+  <g fill="#0b1624">
+    <circle cx="256" cy="48" r="37"/>
+    <circle cx="80" cy="152" r="38"/>
+    <circle cx="432" cy="152" r="38"/>
+    <circle cx="256" cy="256" r="48"/>
+    <circle cx="80" cy="360" r="37"/>
+    <circle cx="432" cy="360" r="37"/>
+    <circle cx="256" cy="464" r="37"/>
+  </g>
+</svg>

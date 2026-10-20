@@ -1,0 +1,10 @@
+.DS_Store
+*.log
+/windows/**/bin/
+/windows/**/obj/
+/windows/**/.vs/
+/macos/.build/
+/macos/**/xcuserdata/
+/macos/**/*.xcodeproj/project.xcworkspace/xcuserdata/
+/macos/DerivedData/
+/dist/

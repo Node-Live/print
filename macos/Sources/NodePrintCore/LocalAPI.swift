@@ -101,8 +101,10 @@ public final class LocalAPI: Sendable {
         let chosen = config.config.channels[channel]
         let title = head.query["title"].flatMap { $0.isEmpty ? nil : $0 } ?? (channel == .label ? "NODE label" : "NODE document")
         let copies = copies(head)!
+        let named = head.headers["content-type"]?.lowercased().hasPrefix("application/json") == true
         queues[channel]!.async {
-            completion(self.withCORS(self.print(channel, on: chosen, body: body, copies: copies, title: title), head))
+            let response = self.print(channel, on: chosen, body: body, named: named, copies: copies, title: title)
+            completion(self.withCORS(response, head))
         }
     }
 
@@ -158,8 +160,9 @@ public final class LocalAPI: Sendable {
         ))
     }
 
-    /// Runs on the channel's queue, in arrival order, on the printer that was chosen when the body came in.
-    private func print(_ channel: Channel, on id: String?, body: Data, copies: Int, title: String) -> Response {
+    /// Runs on the channel's queue, in arrival order, on the printer that was chosen when the body came in. A `named`
+    /// body is JSON naming the document's URL, downloaded here so it keeps its place in the queue.
+    private func print(_ channel: Channel, on id: String?, body: Data, named: Bool, copies: Int, title: String) -> Response {
         guard let id else {
             return .error(409, "NO_PRINTER", "No \(channel.rawValue) printer is chosen in NODE Print.")
         }
@@ -169,7 +172,18 @@ public final class LocalAPI: Sendable {
         guard printer.state == .ready || printer.state == .busy else {
             return .error(409, "PRINTER_UNAVAILABLE", "\(printer.name) is \(printer.state == .error ? "in error" : printer.state.rawValue).")
         }
-        guard let job = PrintJob(channel: channel, body: body, copies: copies, title: title) else {
+        var document = body
+        if named {
+            guard let url = Self.documentURL(in: body) else {
+                return .error(400, "BAD_URL", "The JSON body needs a url that starts with http:// or https://.")
+            }
+            do {
+                document = try Download.fetch(url)
+            } catch {
+                return .error(502, "FETCH_FAILED", "Downloading \(error.message)")
+            }
+        }
+        guard let job = PrintJob(channel: channel, body: document, copies: copies, title: title) else {
             return .error(400, "BAD_DOCUMENT", "The body is not a PDF, PNG or JPEG with at least one page.")
         }
         do {
@@ -180,6 +194,16 @@ public final class LocalAPI: Sendable {
         return Response(status: 200, json: ["job": JobReceipt(
             channel: job.channel, printer: printer.name, pages: job.pages, copies: job.copies
         )])
+    }
+
+    private static func documentURL(in body: Data) -> URL? {
+        guard let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+              let text = object["url"] as? String,
+              let url = URL(string: text),
+              let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
+              url.host?.isEmpty == false
+        else { return nil }
+        return url
     }
 
     private func withCORS(_ response: Response, _ head: RequestHead) -> Response {

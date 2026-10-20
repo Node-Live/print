@@ -38,3 +38,7 @@ sleep 5
 kill "$pid"
 wait "$pid" || true
 ls -la "$out"
+for report in "$HOME"/Library/Logs/DiagnosticReports/NODE*; do
+  [ -e "$report" ] && head -c 6000 "$report"
+done
+true

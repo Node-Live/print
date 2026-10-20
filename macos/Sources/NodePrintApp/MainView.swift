@@ -18,7 +18,7 @@ struct MainView: View {
                 .frame(maxWidth: .infinity)
                 .position(x: Theme.windowSize.width / 2, y: model.titlebarMidY)
         }
-        .frame(width: Theme.windowSize.width, height: Theme.windowSize.height)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
         .environment(\.colorScheme, .light)
     }

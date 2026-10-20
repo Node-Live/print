@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private(set) var model: AppModel?
     @ObservationIgnored private var server: LocalServer?
     @ObservationIgnored private var window: NSWindow?
+    @ObservationIgnored private var fixingSize = false
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         if let id = Bundle.main.bundleIdentifier,
@@ -76,7 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// Renders the window content to a PNG, for CI runners that may not capture the screen.
     private func snapshot(_ model: AppModel, to url: URL) {
-        let renderer = ImageRenderer(content: MainView(model: model))
+        let renderer = ImageRenderer(content: MainView(model: model).frame(width: Theme.windowSize.width, height: Theme.windowSize.height))
         renderer.scale = 2
         guard let image = renderer.cgImage,
               let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil)
@@ -103,6 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         model.watch(true)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        alignCapsule(in: window)
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -111,12 +113,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// AppKit grows the window when it lays out the toolbar on some systems; the window has one size.
     func windowDidResize(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow, window.frame.size != Theme.windowSize else { return }
+        guard !fixingSize, let window = notification.object as? NSWindow, window.frame.size != Theme.windowSize else { return }
+        fixingSize = true
+        defer { fixingSize = false }
         var frame = window.frame
         frame.origin.y += frame.height - Theme.windowSize.height
         frame.size = Theme.windowSize
         window.setFrame(frame, display: true)
-        alignCapsule(in: window)
+        if window.frame.size != Theme.windowSize {
+            NSLog("NODE Print: the window stays %@", NSStringFromSize(window.frame.size))
+        }
     }
 
     private func alignCapsule(in window: NSWindow) {
@@ -149,7 +155,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.setFrame(NSRect(origin: .zero, size: Theme.windowSize), display: false)
         window.delegate = self
         window.center()
-        alignCapsule(in: window)
         return window
     }
 }

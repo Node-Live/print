@@ -33,14 +33,6 @@ internal sealed record Look(string Key, Brush Ink, Brush Dot)
         _ => ChannelState.Ready,
     });
 
-    private static readonly TimeSpan LinkWindow = TimeSpan.FromSeconds(60);
-
-    /// <summary>Linked while a NODE page has had a successful answer in the last minute.</summary>
-    public static Look OfLink(DateTimeOffset? lastLinked) =>
-        lastLinked is { } at && DateTimeOffset.UtcNow - at < LinkWindow
-            ? new("LinkedToNode", GreenInk, GreenDot)
-            : new("WaitingForNode", GrayInk, GrayDot);
-
     public static string? ConnectionKey(Connection connection) => connection switch
     {
         Connection.Usb => "ConnectionUsb",

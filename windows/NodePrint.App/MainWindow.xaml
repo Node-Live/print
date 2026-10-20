@@ -5,6 +5,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:NodePrint.App">
 
+    <!-- The page fills the window whatever its size; the layout itself is the design's fixed 520 × 372. -->
+    <Grid x:Name="Page" Background="White">
     <Grid x:Name="Root" Width="520" Height="372" HorizontalAlignment="Left" VerticalAlignment="Top">
         <Border x:Name="DragStrip" Height="58" VerticalAlignment="Top" />
 
@@ -81,21 +83,6 @@
             </StackPanel>
         </Grid>
 
-        <StackPanel
-            Orientation="Horizontal"
-            HorizontalAlignment="Left"
-            VerticalAlignment="Top"
-            Margin="26,25,0,0"
-            IsHitTestVisible="False">
-            <Ellipse x:Name="LinkDot" Width="6" Height="6" Margin="0,0,6,0" VerticalAlignment="Center" />
-            <TextBlock
-                x:Name="LinkText"
-                FontSize="12"
-                FontWeight="Medium"
-                TextLineBounds="Tight"
-                VerticalAlignment="Center" />
-        </StackPanel>
-
         <TextBlock
             x:Name="PortText"
             Margin="0,54,0,0"
@@ -113,5 +100,6 @@
 
         <local:ChannelSection x:Name="LabelSection" Margin="20,68,20,0" VerticalAlignment="Top" />
         <local:ChannelSection x:Name="DocumentSection" Margin="20,172,20,0" VerticalAlignment="Top" />
+    </Grid>
     </Grid>
 </Window>

@@ -85,7 +85,6 @@ public sealed partial class NativeWindow : Window
                 (service.Printers(), service.ChannelStatus(Channel.Label), service.ChannelStatus(Channel.Document)));
             LabelChannel.Show(printers, label);
             DocumentChannel.Show(printers, document);
-            LinkText.Text = Strings.Get(Look.OfLink(service.LastLinked).Key);
             PortBar.IsOpen = portInUse();
         }
         catch (Exception e)

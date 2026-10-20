@@ -41,16 +41,19 @@
             VerticalAlignment="Top"
             Click="OnCardClick">
             <FlyoutBase.AttachedFlyout>
+                <!-- Under the card, as wide as it, inside the window: a long list scrolls and a card low in the window
+                     opens it upwards. The presenter keeps its own Acrylic background, corners and shadow. -->
                 <Flyout
                     x:Name="Picker"
                     Placement="Bottom"
-                    ShouldConstrainToRootBounds="False"
+                    ShouldConstrainToRootBounds="True"
                     Opened="OnPickerOpened"
                     Closed="OnPickerClosed">
                     <Flyout.FlyoutPresenterStyle>
                         <Style TargetType="FlyoutPresenter">
                             <Setter Property="MinWidth" Value="480" />
                             <Setter Property="MaxWidth" Value="480" />
+                            <Setter Property="MaxHeight" Value="214" />
                             <Setter Property="Padding" Value="6" />
                         </Style>
                     </Flyout.FlyoutPresenterStyle>

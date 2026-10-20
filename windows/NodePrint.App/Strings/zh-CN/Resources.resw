@@ -87,12 +87,6 @@
   <data name="PortInUse" xml:space="preserve">
     <value>端口 19233 被占用</value>
   </data>
-  <data name="LinkedToNode" xml:space="preserve">
-    <value>已连接 NODE</value>
-  </data>
-  <data name="WaitingForNode" xml:space="preserve">
-    <value>等待 NODE</value>
-  </data>
   <data name="Version" xml:space="preserve">
     <value>版本 {0}</value>
   </data>

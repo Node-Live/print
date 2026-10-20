@@ -7,7 +7,6 @@ param(
 $ErrorActionPreference = 'Stop'
 New-Item -ItemType Directory -Force $Out | Out-Null
 $api = 'http://127.0.0.1:19233'
-$node = @{ Origin = 'https://nrp.node.live' }
 $configDir = Join-Path $env:LOCALAPPDATA 'NODE Print'
 New-Item -ItemType Directory -Force $configDir | Out-Null
 $failures = [System.Collections.Generic.List[string]]::new()
@@ -136,7 +135,6 @@ if (-not $status) {
 }
 $status | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $Out 'status.json')
 Invoke-RestMethod "$api/printers" | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $Out 'printers.json')
-Invoke-WebRequest "$api/status" -Headers $node | Out-Null
 $window = Find-Window $process
 Save-Window $window 'design-main-window'
 $rect = [Screen]::Bounds($window)
@@ -185,7 +183,6 @@ foreach ($style in 'design', 'native') {
         Write-Config $state[1] $state[2]
         $process = Start-App $arguments
         if (Wait-Api $process 30) {
-            if ($state[0] -eq 'main-window') { Invoke-WebRequest "$api/status" -Headers $node | Out-Null }
             $window = Find-Window $process
             Save-Window $window "$style-$($state[0])"
             if ($style -eq 'native' -and $state[0] -eq 'main-window') {

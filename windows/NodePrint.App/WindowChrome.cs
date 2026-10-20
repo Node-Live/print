@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Dwm;
+using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace NodePrint.App;
 
@@ -10,6 +11,7 @@ namespace NodePrint.App;
 internal static unsafe class WindowChrome
 {
     private static readonly List<Func<uint, WPARAM, LPARAM, bool>> Hooks = [];
+    private static System.Drawing.Point fixedSize;
 
     public static void Attach(HWND window)
     {
@@ -18,6 +20,10 @@ internal static unsafe class WindowChrome
         // Windows 10 has no such attribute; the call just fails there.
         PInvoke.DwmSetWindowAttribute(window, DWMWINDOWATTRIBUTE.DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(DWM_WINDOW_CORNER_PREFERENCE));
     }
+
+    /// <summary>Holds the window at this outer size: whatever frame the title bar settings bring back, it cannot be
+    /// dragged larger or smaller.</summary>
+    public static void FixSize(int width, int height) => fixedSize = new System.Drawing.Point(width, height);
 
     /// <summary>Runs on every message to the window; returning true swallows it.</summary>
     public static void AddHook(Func<uint, WPARAM, LPARAM, bool> hook) => Hooks.Add(hook);
@@ -31,6 +37,13 @@ internal static unsafe class WindowChrome
         if (message == PInvoke.WM_NCLBUTTONDBLCLK ||
             (message == PInvoke.WM_SYSCOMMAND && (wParam.Value & 0xFFF0) == PInvoke.SC_MAXIMIZE))
         {
+            return (LRESULT)0;
+        }
+        if (message == PInvoke.WM_GETMINMAXINFO && fixedSize.X > 0)
+        {
+            var limits = (MINMAXINFO*)lParam.Value;
+            limits->ptMinTrackSize = fixedSize;
+            limits->ptMaxTrackSize = fixedSize;
             return (LRESULT)0;
         }
         foreach (var hook in Hooks)

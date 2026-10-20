@@ -11,7 +11,6 @@
 
     <StackPanel Padding="24,16,24,24" Spacing="16">
         <InfoBar x:Name="PortBar" Severity="Error" IsClosable="False" />
-        <TextBlock x:Name="LinkText" Style="{StaticResource BodyTextBlockStyle}" />
         <local:NativeChannel x:Name="LabelChannel" />
         <local:NativeChannel x:Name="DocumentChannel" />
         <TextBlock

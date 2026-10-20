@@ -1,11 +1,8 @@
-using Microsoft.UI;
-using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Input;
-using Microsoft.UI.Xaml.Media;
 using NodePrint.Core;
 using Windows.Graphics;
 using Windows.Win32;
@@ -31,20 +28,16 @@ public sealed partial class MainWindow : Window
         Handle = new HWND(WinRT.Interop.WindowNative.GetWindowHandle(this));
         Title = "NODE Print";
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets", "NodePrint.ico"));
+        // The top of the window is ours: no system caption buttons, the strip around the pill drags the window.
+        AppWindow.TitleBar.ExtendsContentIntoTitleBar = true;
+        AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Collapsed;
+        // After the title bar change, which brings the sizing frame back.
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
             presenter.IsResizable = false;
             presenter.IsMaximizable = false;
         }
-        // The top of the window is ours: no system caption buttons, the strip around the pill drags the window.
-        AppWindow.TitleBar.ExtendsContentIntoTitleBar = true;
-        AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Collapsed;
         WindowChrome.Attach(Handle);
-
-        // Mica shows through a light veil so the cards keep the design's contrast; without Mica the window is white.
-        bool mica = MicaController.IsSupported();
-        if (mica) SystemBackdrop = new MicaBackdrop();
-        Root.Background = new SolidColorBrush(mica ? ColorHelper.FromArgb(0xCC, 0xFF, 0xFF, 0xFF) : Colors.White);
 
         VersionText.Text = "v" + AppInfo.Version;
         PortText.Text = Strings.Get("PortInUse");
@@ -57,9 +50,14 @@ public sealed partial class MainWindow : Window
         Root.Loaded += (_, _) =>
         {
             FitContent();
+            Center();
             Shadows.Attach(PillShadow, PillShape, (3, 1, 0.05f), (24, 6, 0.07f));
             SetDragRegion();
-            Root.XamlRoot.Changed += (_, _) => SetDragRegion();
+            Root.XamlRoot.Changed += (_, _) =>
+            {
+                if (Root.XamlRoot.Size != new Windows.Foundation.Size(ContentWidth, ContentHeight)) FitContent();
+                SetDragRegion();
+            };
         };
 
         AppWindow.Closing += (_, args) =>
@@ -106,10 +104,6 @@ public sealed partial class MainWindow : Window
                 (service.ChannelStatus(Channel.Label), service.ChannelStatus(Channel.Document)));
             LabelSection.Show(label);
             DocumentSection.Show(document);
-            var link = Look.OfLink(service.LastLinked);
-            LinkText.Text = Strings.Get(link.Key);
-            LinkText.Foreground = link.Ink;
-            LinkDot.Fill = link.Dot;
             PortText.Visibility = portInUse() ? Visibility.Visible : Visibility.Collapsed;
         }
         catch (Exception e)
@@ -125,10 +119,11 @@ public sealed partial class MainWindow : Window
     {
         var content = Root.XamlRoot.Size;
         double scale = Root.XamlRoot.RasterizationScale;
-        AppWindow.Resize(new SizeInt32(
+        var size = new SizeInt32(
             AppWindow.Size.Width + (int)Math.Round((ContentWidth - content.Width) * scale),
-            AppWindow.Size.Height + (int)Math.Round((ContentHeight - content.Height) * scale)));
-        Center();
+            AppWindow.Size.Height + (int)Math.Round((ContentHeight - content.Height) * scale));
+        WindowChrome.FixSize(size.Width, size.Height);
+        AppWindow.Resize(size);
     }
 
     private void PlaceOnScreen()

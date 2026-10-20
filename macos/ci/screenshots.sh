@@ -28,6 +28,8 @@ capture() { # style language file [VAR=value for the app]
     id=$(/tmp/window-id "NODE Print" || true)
     [ -n "$id" ] && break
   done
+  # A launch right after the previous copy quit does not always come to the front; opening the running app does.
+  open -a "$app"
   sleep 2
   [ -n "$id" ] && [ -n "$3" ] && screencapture -o -x -l "$id" "$3"
   sleep 1

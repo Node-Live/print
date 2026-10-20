@@ -28,9 +28,11 @@ Only NODE web origins may call the app. The allowed origins are, in this order:
 
 For an allowed `Origin` the app answers with `Access-Control-Allow-Origin: <that origin>`,
 `Access-Control-Allow-Methods: GET, POST, OPTIONS`, `Access-Control-Allow-Headers: Content-Type`,
-`Access-Control-Allow-Private-Network: true` and `Access-Control-Max-Age: 600`. A preflight (`OPTIONS`)
-returns `204`. Any other origin gets no CORS headers at all, so the browser blocks it; requests without an
-`Origin` header (curl, tests) are served.
+`Access-Control-Allow-Private-Network: true` and `Access-Control-Max-Age: 600`. A preflight (`OPTIONS`, any
+path) returns `204`. A request carrying any other `Origin` is answered `403` with code `FORBIDDEN_ORIGIN`, no
+CORS headers, and nothing is done (a browser only hides the response from a foreign page; it still sends the
+request, and a page must not be able to make a label printer print by posting a "simple" request). Requests
+without an `Origin` header (curl, tests) are served.
 
 What the browser side has to live with (the app only needs the headers above):
 
@@ -162,6 +164,7 @@ Errors:
 
 | status | code                  | when                                                   |
 |--------|-----------------------|--------------------------------------------------------|
+| 403    | `FORBIDDEN_ORIGIN`    | the `Origin` header is not an allowed origin           |
 | 400    | `BAD_CHANNEL`         | `channel` is missing or not `label` / `document`       |
 | 400    | `BAD_COPIES`          | `copies` is not 1–99                                   |
 | 400    | `BAD_DOCUMENT`        | the body is not a PDF / PNG / JPEG the app can open, or has 0 pages |
@@ -169,6 +172,10 @@ Errors:
 | 409    | `NO_PRINTER`          | the channel has no printer chosen                      |
 | 409    | `PRINTER_UNAVAILABLE` | chosen printer is missing, offline, in error or paused |
 | 500    | `PRINT_FAILED`        | the OS or the printer refused the job (`message` says) |
+
+Checks run in this order, the first failure answers: origin → channel → copies → size (a `Content-Length`
+over the limit is `413` at once; a body without one is counted as it is read) → `NO_PRINTER` →
+`PRINTER_UNAVAILABLE` → opening the document → printing. `title` is URL-decoded with `+` as a space.
 
 Anything else is `404` with code `NOT_FOUND` or `405` with code `METHOD_NOT_ALLOWED`, both with a `message`.
 

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Starts the packed app in each window style and language on a fresh config and captures the real window
-# (title bar and materials included) into $2/<style>/.
+# Starts the packed app in each language on a fresh config and captures the real window (title bar and
+# materials included) into $2.
 set -euo pipefail
 app="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 mkdir -p "$2"
@@ -15,9 +15,9 @@ trap crash_reports EXIT
 swiftc -O "$(dirname "$0")/window-id.swift" -o /tmp/window-id
 
 # Launched through LaunchServices so the window comes up active, as a user would see it.
-capture() { # style language file
+capture() { # language file
   rm -rf "$HOME/Library/Application Support/NODE Print"
-  open -n "$app" --args --style "$1" -AppleLanguages "($2)"
+  open -n "$app" --args -AppleLanguages "($1)"
   local id=""
   for _ in $(seq 1 30); do
     sleep 0.5
@@ -27,17 +27,14 @@ capture() { # style language file
   # A launch right after the previous copy quit does not always come to the front; opening the running app does.
   open -a "$app"
   sleep 2
-  [ -n "$id" ] && screencapture -o -x -l "$id" "$3"
+  [ -n "$id" ] && screencapture -o -x -l "$id" "$2"
   sleep 1
   for pid in $(pgrep -x "NODE Print"); do kill "$pid"; done
   while pgrep -x "NODE Print" > /dev/null; do sleep 0.2; done
 }
 
-for style in design native; do
-  mkdir -p "$out/$style"
-  for language in en zh-Hans es; do
-    capture "$style" "$language" "$out/$style/main-window-$style-$language.png"
-  done
+for language in en zh-Hans es; do
+  capture "$language" "$out/main-window-$language.png"
 done
 
-ls -la "$out"/*
+ls -la "$out"

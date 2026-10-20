@@ -5,7 +5,7 @@ A menu bar app (SwiftUI, macOS 14+, Liquid Glass on macOS 26) that serves `docs/
 | path                         | what                                                                   |
 |------------------------------|------------------------------------------------------------------------|
 | `Sources/NodePrintCore`      | local server, CUPS printer list, printing, config, parked ZPL encoder  |
-| `Sources/NodePrintApp`       | the app: menu bar item, window (design and native styles), picker     |
+| `Sources/NodePrintApp`       | the app: menu bar item, window, printer picker                         |
 | `Tests/NodePrintCoreTests`   | protocol, ZPL vectors (`../testdata/zpl`), config, driver jobs         |
 | `Resources`                  | String Catalog (en, zh-Hans, es) and the app icon                      |
 | `scripts/package.sh`         | builds `dist/NODE Print.app`, the zip and the dmg                      |
@@ -24,8 +24,7 @@ swift test                      # driver-job tests run when a CUPS queue exists
 swift run NodePrintApp          # strings stay English outside the app bundle
 ```
 
-`scripts/package.sh` needs Xcode (universal build); CI runs it on `macos-26`. Window screenshots (both styles, three
-languages) are taken when the workflow is run by hand or the commit message contains `[screenshots]`.
+`scripts/package.sh` needs Xcode (universal build); CI runs it on `macos-26`. Window screenshots (three languages) are taken when the workflow is run by hand or the commit message contains `[screenshots]`.
 
 ## Printing
 
@@ -35,8 +34,3 @@ paper set on it: 4 × 6 in for labels (read back, refused when the driver settle
 documents. Each page is cut to its crop box, turned by its own rotation, turned again when it does not stand the
 way it prints (landscape labels clockwise, landscape documents counter-clockwise), then fitted to the printable
 area and centred. ZPL (`docs/zpl.md`) is parked; its encoder only keeps the shared vectors in `testdata/zpl` passing.
-
-## Window styles
-
-`--style design` (default) is the design in `docs/design/`; `--style native` is the same window in SwiftUI's own
-controls and styles, for comparison.

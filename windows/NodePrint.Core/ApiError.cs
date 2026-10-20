@@ -17,6 +17,12 @@ public sealed class ApiError(int status, string code, string message) : Exceptio
     public static ApiError BadDocument(string detail) =>
         new(400, "BAD_DOCUMENT", $"The body is not a PDF, PNG or JPEG that can be printed: {detail}");
 
+    public static ApiError BadUrl() =>
+        new(400, "BAD_URL", "The JSON body needs a \"url\" that starts with http:// or https://.");
+
+    public static ApiError FetchFailed(Uri url, string detail) =>
+        new(502, "FETCH_FAILED", $"{url} could not be downloaded: {detail}");
+
     public static ApiError TooLarge() =>
         new(413, "TOO_LARGE", $"The document is larger than {LocalApi.MaxBodyBytes:N0} bytes.");
 

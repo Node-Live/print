@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Net;
+using System.Net.Http.Headers;
+using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -116,10 +118,35 @@ public static class LocalApi
         {
             throw ApiError.TooLarge();
         }
-        var document = await ReadBodyAsync(context.Request, context.RequestAborted);
-
-        var job = await service.PrintAsync(channel, copies, query["title"].ToString(), document);
+        var body = await ReadBodyAsync(context.Request, context.RequestAborted);
+        string title = query["title"].ToString();
+        JobInfo job;
+        if (IsJson(context.Request.ContentType))
+        {
+            var url = UrlFetcher.Parse(ParseUrlRequest(body)?.Url);
+            job = await service.PrintAsync(channel, copies, title, () => UrlFetcher.FetchAsync(url));
+        }
+        else
+        {
+            job = await service.PrintAsync(channel, copies, title, body);
+        }
         await WriteAsync(context.Response, 200, new JobResponse(job), ProtocolJson.Default.JobResponse);
+    }
+
+    private static bool IsJson(string? contentType) =>
+        MediaTypeHeaderValue.TryParse(contentType, out var type) &&
+        string.Equals(type.MediaType, "application/json", StringComparison.OrdinalIgnoreCase);
+
+    private static UrlRequest? ParseUrlRequest(ReadOnlyMemory<byte> body)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize(body.Span, ProtocolJson.Default.UrlRequest);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static async Task<ReadOnlyMemory<byte>> ReadBodyAsync(HttpRequest request, CancellationToken cancellation)

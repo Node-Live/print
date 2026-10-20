@@ -80,6 +80,8 @@ public sealed record JobResponse(JobInfo Job);
 
 public sealed record ErrorDetail(string Code, string Message);
 
+public sealed record UrlRequest(string? Url);
+
 public sealed record ErrorResponse(ErrorDetail Error);
 
 [JsonSourceGenerationOptions(
@@ -89,4 +91,5 @@ public sealed record ErrorResponse(ErrorDetail Error);
 [JsonSerializable(typeof(PrintersResponse))]
 [JsonSerializable(typeof(JobResponse))]
 [JsonSerializable(typeof(ErrorResponse))]
+[JsonSerializable(typeof(UrlRequest))]
 public sealed partial class ProtocolJson : JsonSerializerContext;

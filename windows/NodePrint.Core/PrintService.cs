@@ -93,9 +93,13 @@ public sealed class PrintService
     public StatusResponse Status() => new(AppInfo.Id, AppInfo.Version, AppInfo.Platform,
         new ChannelsStatus(ChannelStatus(Channel.Label), ChannelStatus(Channel.Document)));
 
-    /// <summary>Queues a job whose body has been received in full. It takes its place in the channel's queue now, on
-    /// the printer chosen now; finding the printer, checking it and opening the document wait their turn there.</summary>
-    public async Task<JobInfo> PrintAsync(Channel channel, int copies, string? title, ReadOnlyMemory<byte> document)
+    public Task<JobInfo> PrintAsync(Channel channel, int copies, string? title, ReadOnlyMemory<byte> document) =>
+        PrintAsync(channel, copies, title, () => Task.FromResult(document));
+
+    /// <summary>Queues a job whose request has been received in full. It takes its place in the channel's queue now, on
+    /// the printer chosen now; finding the printer, checking it, getting the document (a download, for the URL form)
+    /// and opening it wait their turn there.</summary>
+    public async Task<JobInfo> PrintAsync(Channel channel, int copies, string? title, Func<Task<ReadOnlyMemory<byte>>> document)
     {
         string? id = ChosenId(channel);
         using var turn = (channel == Channel.Label ? labelQueue : documentQueue).Enter();
@@ -107,10 +111,11 @@ public sealed class PrintService
         {
             throw ApiError.PrinterUnavailable(printer.Name, ToChannelState(printer.State), printer.StateMessage);
         }
+        var bytes = await document();
         string jobTitle = string.IsNullOrWhiteSpace(title)
             ? channel == Channel.Label ? "NODE label" : "NODE document"
             : title;
-        int pages = await backend.PrintAsync(printer, channel, document, copies, jobTitle);
+        int pages = await backend.PrintAsync(printer, channel, bytes, copies, jobTitle);
         return new JobInfo(channel, printer.Name, pages, copies);
     }
 

@@ -76,6 +76,7 @@ function Save-Window($window, [string] $name, [int] $below = 0) {
     Start-Sleep -Seconds 3
     $rect = [Screen]::Bounds($window)
     $height = [Math]::Min($rect.Bottom - $rect.Top + $below, [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Height - $rect.Top)
+    if ($rect.Right -le $rect.Left -or $height -le 0) { $failures.Add("$name`: no window bounds ($($rect.Left),$($rect.Top),$($rect.Right),$($rect.Bottom))"); return }
     Save-Screen $rect.Left $rect.Top ($rect.Right - $rect.Left) $height $name
     "$name`: $($rect.Right - $rect.Left)x$($rect.Bottom - $rect.Top) at $([Screen]::GetDpiForWindow($window)) dpi"
 }

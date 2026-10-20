@@ -48,10 +48,11 @@
 
   <!-- The installer carries only what runs: no symbols; none of the files packages drop in for features the app does
        not use (WebView2, the IIS module of ASP.NET Core, background tasks, push notifications, packaged deployment,
-       restart, the XAML designer, phone controls, map assets, WinRT metadata); and of the runtime's translations only
+       restart, the XAML designer, phone controls, map assets, WinRT metadata, the bootstrapper a self-contained app does not
+       call, the controls' index that the app's own resources.pri already merges); and of the runtime's translations only
        the app's own three languages. -->
   <PropertyGroup>
-    <UnusedPublishFiles>;Microsoft.Web.WebView2.Core.dll;WebView2Loader.dll;aspnetcorev2_inprocess.dll;Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.dll;PushNotificationsLongRunningTask.ProxyStub.dll;DeploymentAgent.exe;RestartAgent.exe;Microsoft.UI.Designer.dll;Microsoft.UI.Xaml.Phone.dll;map.html;</UnusedPublishFiles>
+    <UnusedPublishFiles>;Microsoft.Web.WebView2.Core.dll;WebView2Loader.dll;aspnetcorev2_inprocess.dll;Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.dll;PushNotificationsLongRunningTask.ProxyStub.dll;DeploymentAgent.exe;RestartAgent.exe;Microsoft.UI.Designer.dll;Microsoft.UI.Xaml.Phone.dll;map.html;Microsoft.WindowsAppRuntime.Bootstrap.dll;Microsoft.UI.Xaml.Controls.pri;</UnusedPublishFiles>
     <KeptLanguages>;en-US;zh-CN;es-ES;</KeptLanguages>
   </PropertyGroup>
   <Target Name="LeaveUnusedOutOfPublish" AfterTargets="ComputeResolvedFilesToPublishList">

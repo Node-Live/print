@@ -17,6 +17,12 @@ struct MainView: View {
             TitleCapsule()
                 .frame(maxWidth: .infinity)
                 .position(x: Theme.windowSize.width / 2, y: model.titlebarMidY)
+            if !model.listening {
+                Text("Port 19233 is in use")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(Theme.redText)
+                    .position(x: Theme.windowSize.width / 2, y: model.titlebarMidY + 30)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
@@ -138,7 +144,7 @@ struct PrinterCard: View {
                         let detail = status.state == .missing ? "" : printer.detail(for: channel)
                         if !detail.isEmpty {
                             Text(verbatim: detail)
-                                .font(.system(size: 12))
+                                .font(.system(size: 11.5))
                                 .foregroundStyle(Theme.secondary)
                         }
                     } else {

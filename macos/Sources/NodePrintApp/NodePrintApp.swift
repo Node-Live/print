@@ -62,13 +62,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         model.applyLaunchAtLogin()
         self.model = model
 
-        do {
-            let server = try LocalServer(api: LocalAPI(system: system, config: config))
-            server.start()
-            self.server = server
-        } catch {
-            NSLog("NODE Print: cannot listen: %@", error.localizedDescription)
+        let server = LocalServer(api: LocalAPI(system: system, config: config))
+        server.start { port in
+            DispatchQueue.main.async { model.listening = port != nil }
         }
+        self.server = server
         if !launchedAsLoginItem { showWindow() }
         if let path = ProcessInfo.processInfo.environment["NODE_PRINT_SNAPSHOT"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.snapshot(model, to: URL(fileURLWithPath: path)) }
@@ -77,7 +75,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// Renders the window content to a PNG, for CI runners that may not capture the screen.
     private func snapshot(_ model: AppModel, to url: URL) {
-        let renderer = ImageRenderer(content: MainView(model: model).frame(width: Theme.windowSize.width, height: Theme.windowSize.height))
+        let content = native
+            ? AnyView(NativeView(model: model))
+            : AnyView(MainView(model: model).frame(width: Theme.windowSize.width, height: Theme.windowSize.height))
+        let renderer = ImageRenderer(content: content)
         renderer.scale = 2
         guard let image = renderer.cgImage,
               let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil)
@@ -97,9 +98,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return false
     }
 
+    /// `--style native` opens the window in SwiftUI's default styles instead of the design's.
+    private let native = CommandLine.arguments.firstIndex(of: "--style").map {
+        CommandLine.arguments.indices.contains($0 + 1) && CommandLine.arguments[$0 + 1] == "native"
+    } ?? false
+
     func showWindow() {
         guard let model else { return }
-        let window = window ?? makeWindow(model)
+        let window = window ?? (native ? makeNativeWindow(model) : makeWindow(model))
         self.window = window
         model.watch(true)
         NSApp.activate(ignoringOtherApps: true)
@@ -113,7 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// AppKit grows the window when it lays out the toolbar on some systems; the window has one size.
     func windowDidResize(_ notification: Notification) {
-        guard !fixingSize, let window = notification.object as? NSWindow, window.frame.size != Theme.windowSize else { return }
+        guard !native, !fixingSize, let window = notification.object as? NSWindow, window.frame.size != Theme.windowSize else { return }
         fixingSize = true
         defer { fixingSize = false }
         var frame = window.frame
@@ -126,9 +132,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func alignCapsule(in window: NSWindow) {
-        guard let close = window.standardWindowButton(.closeButton) else { return }
+        guard !native, let close = window.standardWindowButton(.closeButton) else { return }
         window.layoutIfNeeded()
         model?.titlebarMidY = window.frame.height - close.convert(close.bounds, to: nil).midY
+    }
+
+    private func makeNativeWindow(_ model: AppModel) -> NSWindow {
+        let content = NSHostingController(rootView: NativeView(model: model))
+        content.sizingOptions = .preferredContentSize
+        let window = NSWindow(contentViewController: content)
+        window.title = "NODE Print"
+        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.collectionBehavior = [.fullScreenNone]
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        window.center()
+        return window
     }
 
     private func makeWindow(_ model: AppModel) -> NSWindow {

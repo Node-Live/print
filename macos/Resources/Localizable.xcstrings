@@ -65,6 +65,22 @@
         }
       }
     },
+    "Connection": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conexión"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接"
+          }
+        }
+      }
+    },
     "Document printer": {
       "localizations": {
         "es": {
@@ -241,6 +257,22 @@
         }
       }
     },
+    "Paper": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Papel"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "纸张"
+          }
+        }
+      }
+    },
     "Paused": {
       "localizations": {
         "es": {
@@ -269,6 +301,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "拣货单和装箱单 · Letter"
+          }
+        }
+      }
+    },
+    "Port 19233 is in use": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El puerto 19233 está en uso"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端口 19233 已被占用"
+          }
+        }
+      }
+    },
+    "Printer": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impresora"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打印机"
           }
         }
       }
@@ -337,6 +401,22 @@
         }
       }
     },
+    "Status": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estado"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "状态"
+          }
+        }
+      }
+    },
     "Thermal": {
       "localizations": {
         "es": {
@@ -353,6 +433,22 @@
         }
       }
     },
+    "Type": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tipo"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "类型"
+          }
+        }
+      }
+    },
     "USB": {
       "localizations": {
         "es": {
@@ -365,6 +461,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "USB"
+          }
+        }
+      }
+    },
+    "Version": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versión"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "版本"
           }
         }
       }

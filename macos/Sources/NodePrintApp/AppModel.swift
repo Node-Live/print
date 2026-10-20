@@ -9,6 +9,8 @@ final class AppModel {
     private(set) var printers: [Printer] = []
     private(set) var channels: Config.Channels
     private(set) var launchAtLogin: Bool
+    /// Whether the local server holds its port.
+    var listening = true
     /// Distance from the window top to the centre of the traffic lights, so the capsule sits level with them.
     var titlebarMidY: CGFloat = 29.75
 

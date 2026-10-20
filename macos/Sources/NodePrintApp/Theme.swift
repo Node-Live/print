@@ -14,11 +14,11 @@ enum Theme {
 
     static let green = Color(hex: 0x1BA865)
     static let greenText = Color(hex: 0x13814D)
-    static let amber = Color(hex: 0xE5A000)
-    static let amberText = Color(hex: 0xA86A00)
+    static let amber = Color(hex: 0xE8A317)
+    static let amberText = Color(hex: 0x9A6700)
     static let red = Color(hex: 0xE5484D)
-    static let redText = Color(hex: 0xC4262C)
-    static let gray = Color(hex: 0xA1A1A8)
+    static let redText = Color(hex: 0xC4314B)
+    static let gray = Color(hex: 0xB4B4BB)
 }
 
 extension Color {

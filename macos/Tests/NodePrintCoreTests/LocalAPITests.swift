@@ -350,6 +350,20 @@ func samplePDF(pages: Int = 1, size: CGSize = CGSize(width: 288, height: 432)) -
         #expect(!system.overlapped)
     }
 
+    @Test func printsInTheOrderTheBodiesArrived() async throws {
+        let system = FakePrinting([rollo])
+        let harness = try await Harness.start(system, channels: .init(label: rollo.id))
+        // A takes longer to open than B, but its body is in first.
+        let a = fixturePNG(width: 812, height: 1218)
+        let b = samplePDF()
+        async let first = harness.send("POST", "/print?channel=label&title=A", body: a)
+        try await Task.sleep(for: .milliseconds(5))
+        async let second = harness.send("POST", "/print?channel=label&title=B", body: b)
+        let statuses = try await [first.status, second.status]
+        #expect(statuses == [200, 200])
+        #expect(system.jobs.map(\.job.title) == ["A", "B"])
+    }
+
     @Test func answersAnExpectContinueBeforeTheBody() async throws {
         let harness = try await Harness.start(FakePrinting([rollo]), channels: .init(label: rollo.id))
         let pdf = samplePDF()

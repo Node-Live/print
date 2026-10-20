@@ -156,9 +156,7 @@ private final class HTTPConnection: @unchecked Sendable {
     }
 
     private func respond(_ head: RequestHead, body: Data) {
-        let api = api
-        Task {
-            let response = await api.response(to: head, body: body)
+        api.respond(to: head, body: body) { response in
             self.queue.async { self.send(response) { self.connection.cancel() } }
         }
     }

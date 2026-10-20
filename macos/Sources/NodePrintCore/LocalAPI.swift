@@ -90,9 +90,26 @@ public final class LocalAPI: Sendable {
 
     private static let tooLarge = Response.error(413, "TOO_LARGE", "The document is larger than 52,428,800 bytes.")
 
+    /// Answers a request whose body is in. A print job takes its place in the channel's queue before this returns,
+    /// so jobs print in the order their bodies arrived, whatever it takes to open them.
+    public func respond(to head: RequestHead, body: Data, completion: @escaping @Sendable (Response) -> Void) {
+        if let early = response(to: head, contentLength: body.count) { return completion(early) }
+        guard head.path == "/print" else {
+            return DispatchQueue.global().async { completion(self.withCORS(self.route(head), head)) }
+        }
+        let channel = Channel(rawValue: head.query["channel"] ?? "")!
+        let chosen = config.config.channels[channel]
+        let title = head.query["title"].flatMap { $0.isEmpty ? nil : $0 } ?? (channel == .label ? "NODE label" : "NODE document")
+        let copies = copies(head)!
+        queues[channel]!.async {
+            completion(self.withCORS(self.print(channel, on: chosen, body: body, copies: copies, title: title), head))
+        }
+    }
+
     public func response(to head: RequestHead, body: Data) async -> Response {
-        if let early = response(to: head, contentLength: body.count) { return early }
-        return withCORS(await route(head, body: body), head)
+        await withCheckedContinuation { continuation in
+            respond(to: head, body: body) { continuation.resume(returning: $0) }
+        }
     }
 
     private func allows(_ origin: String) -> Bool {
@@ -127,28 +144,23 @@ public final class LocalAPI: Sendable {
         return copies
     }
 
-    private func route(_ head: RequestHead, body: Data) async -> Response {
-        switch head.path {
-        case "/status":
-            let printers = system.printers()
-            let channels = config.config.channels
-            return Response(status: 200, json: Status(
-                version: NodePrint.version,
-                channels: Dictionary(uniqueKeysWithValues: Channel.allCases.map {
-                    ($0.rawValue, ChannelStatus(chosen: channels[$0], among: printers))
-                })
-            ))
-        case "/printers":
-            return Response(status: 200, json: ["printers": system.printers().inListOrder()])
-        default:
-            return await print(head, body: body)
+    private func route(_ head: RequestHead) -> Response {
+        let printers = system.printers()
+        guard head.path == "/status" else {
+            return Response(status: 200, json: ["printers": printers.inListOrder()])
         }
+        let channels = config.config.channels
+        return Response(status: 200, json: Status(
+            version: NodePrint.version,
+            channels: Dictionary(uniqueKeysWithValues: Channel.allCases.map {
+                ($0.rawValue, ChannelStatus(chosen: channels[$0], among: printers))
+            })
+        ))
     }
 
-    /// The body is in: the job takes its place in the channel's queue now, on the printer chosen now.
-    private func print(_ head: RequestHead, body: Data) async -> Response {
-        let channel = Channel(rawValue: head.query["channel"] ?? "")!
-        guard let id = config.config.channels[channel] else {
+    /// Runs on the channel's queue, in arrival order, on the printer that was chosen when the body came in.
+    private func print(_ channel: Channel, on id: String?, body: Data, copies: Int, title: String) -> Response {
+        guard let id else {
             return .error(409, "NO_PRINTER", "No \(channel.rawValue) printer is chosen in NODE Print.")
         }
         guard let printer = system.printers().first(where: { $0.id == id }) else {
@@ -157,19 +169,9 @@ public final class LocalAPI: Sendable {
         guard printer.state == .ready || printer.state == .busy else {
             return .error(409, "PRINTER_UNAVAILABLE", "\(printer.name) is \(printer.state == .error ? "in error" : printer.state.rawValue).")
         }
-        let title = head.query["title"].flatMap { $0.isEmpty ? nil : $0 } ?? (channel == .label ? "NODE label" : "NODE document")
-        guard let job = PrintJob(channel: channel, body: body, copies: copies(head)!, title: title) else {
+        guard let job = PrintJob(channel: channel, body: body, copies: copies, title: title) else {
             return .error(400, "BAD_DOCUMENT", "The body is not a PDF, PNG or JPEG with at least one page.")
         }
-        let system = system
-        return await withCheckedContinuation { continuation in
-            queues[channel]!.async {
-                continuation.resume(returning: Self.run(job, on: printer, system: system))
-            }
-        }
-    }
-
-    private static func run(_ job: PrintJob, on printer: Printer, system: any PrintSystem) -> Response {
         do {
             try system.print(job, on: printer)
         } catch {

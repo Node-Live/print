@@ -11,7 +11,6 @@ enum Theme {
     static let card = Color(hex: 0xF2F2F4)
     static let tileBorder = Color(hex: 0xE3E3E5)
     static let pillBorder = Color(hex: 0xE5E5E7)
-    static let capsuleEdge = Color(hex: 0xE7E7E7)
 
     static let green = Color(hex: 0x1BA865)
     static let greenText = Color(hex: 0x13814D)

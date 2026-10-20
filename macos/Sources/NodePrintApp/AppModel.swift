@@ -11,7 +11,7 @@ final class AppModel {
     private(set) var launchAtLogin: Bool
     /// Whether the local server holds its port.
     var listening = true
-    /// Distance from the window top to the centre of the traffic lights, so the capsule sits level with them.
+    /// Distance from the window top to the centre of the traffic lights, so the title sits level with them.
     var titlebarMidY: CGFloat = 29.75
 
     let config: ConfigStore

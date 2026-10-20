@@ -104,7 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         model.watch(true)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
-        alignCapsule(in: window)
+        alignTitle(in: window)
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -125,7 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    private func alignCapsule(in window: NSWindow) {
+    private func alignTitle(in window: NSWindow) {
         guard let close = window.standardWindowButton(.closeButton) else { return }
         window.layoutIfNeeded()
         model?.titlebarMidY = window.frame.height - close.convert(close.bounds, to: nil).midY

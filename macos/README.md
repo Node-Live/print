@@ -1,6 +1,6 @@
 # NODE Print for macOS
 
-A menu bar app (SwiftUI, macOS 14+, Liquid Glass on macOS 26) that serves `docs/protocol.md` on `127.0.0.1:19233`.
+A menu bar app (SwiftUI, macOS 14+) that serves `docs/protocol.md` on `127.0.0.1:19233`.
 
 | path                         | what                                                                   |
 |------------------------------|------------------------------------------------------------------------|
@@ -15,9 +15,7 @@ The version lives in `Sources/NodePrintCore/Version.swift`; the window, `/status
 
 ## Local work
 
-Command Line Tools are enough for the core and for a look at the window. The Liquid Glass code is compiled only
-by Swift 6.2+ (`#if compiler(>=6.2)`, the macOS 26 SDK) and picked at run time with `#available(macOS 26, *)`, so
-an older toolchain builds the material fallback:
+Command Line Tools are enough for the core and for a look at the window:
 
 ```sh
 swift test                      # driver-job tests run when a CUPS queue exists

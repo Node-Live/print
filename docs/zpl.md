@@ -7,10 +7,11 @@ mis-set driver. Both apps implement this the same way; `testdata/zpl/` holds vec
 
 ## Which queues count as ZPL
 
-- Windows: the driver name starts with `ZDesigner` and does not contain `(EPL)`; or the driver name contains
-  `ZPL`.
+- Windows: the driver name starts with `ZDesigner` and does not contain `(EPL)` or `(CPCL)`; or the driver
+  name contains `ZPL`.
 - macOS: the queue's PPD / IPP make-and-model contains `Zebra` or `ZPL`, or its IEEE 1284 device id has
-  `CMD:` containing `ZPL`. EPL-only queues (`EPL` without `ZPL`) are not ZPL.
+  `CMD:` containing `ZPL`. A queue whose name or make-and-model says `EPL` or `CPCL` without `ZPL` (such as
+  the built-in "Zebra CPCL Label Printer" driver) is not ZPL.
 
 Everything else prints through the OS driver.
 
@@ -100,3 +101,7 @@ digit and repeated rows; every ZPL II printer accepts it. Encode each row left t
 `rows` are the packed rows in hex (test-sized bitmaps, so `width`/`length` here are the bitmap's, not a 4 × 6
 label); `data` is the exact compressed field. Both apps must produce `data` from `rows` byte for byte, and
 the job text around it as in the template above with the vector's `width`/`length`/`bytesPerRow`.
+
+`testdata/zpl/*.pdf` are 4 × 6 pages (blank, a black border, a landscape page with a corner mark) with a
+vector of the same name: rendering the PDF at the vector's `dpi` by the steps above must give exactly the
+vector's `rows`. The landscape one pins the rotation direction.

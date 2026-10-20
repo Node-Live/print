@@ -47,8 +47,12 @@ Access, "loopback" permission). That is handled on the web side; the app only ne
 }
 ```
 
+- `version`: the app's own version; both apps start at `1.0.0` and move together.
 - `platform`: `"windows"` or `"macos"`.
-- `channels.<name>.printer`: the chosen printer, or `null` when none is chosen.
+- `channels.<name>.printer`: the chosen printer, or `null` when none is chosen. When the chosen printer is
+  no longer installed (`state` `"missing"`) it is a placeholder so the web can still name it: `id` and `name`
+  both the configured id, `model` `""`, `connection` `"other"`, `kind` `"other"`, `papers` `[]`, `language`
+  `"driver"`, `dpi` `0`, `state` `"offline"`, `default` `false`.
 - `channels.<name>.state`: `"ready"`, `"busy"` (the queue is printing), `"paused"`, `"offline"`, `"error"`,
   `"missing"` (chosen printer no longer installed) or `"none"` (nothing chosen).
 
@@ -89,8 +93,9 @@ printers first, then the rest, each group by name.
   `""` when unknown.
 - `connection`: `"usb"`, `"network"`, `"bluetooth"` or `"other"`. Say `"network"` whenever a printer is
   reached over IP; the OS does not tell Wi-Fi from Ethernet, so the app does not claim to.
-- `kind`: `"thermal"` for a label printer (ZPL, or a queue whose largest paper is a label size), `"other"`
-  otherwise. Nothing else is guessed: no "laser", no "inkjet".
+- `kind`: `"thermal"` for a label printer, `"other"` otherwise. A label printer is a ZPL queue, or a queue
+  whose largest paper (by area, among the sizes the driver reports) has a short edge of at most 4.25 in
+  (108 mm). Nothing else is guessed: no "laser", no "inkjet".
 - `papers`: which of `"4x6"`, `"Letter"`, `"A4"` the driver reports. May be empty.
 - `language`: `"zpl"` when the queue is a ZPL printer (see `zpl.md`), else `"driver"`.
 - `dpi`: the print resolution the driver reports, `203` for a ZPL printer that reports none, `0` otherwise.

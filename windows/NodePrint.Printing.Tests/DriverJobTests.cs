@@ -51,9 +51,23 @@ public sealed class DriverJobTests
         Assert.All(pages, p => Assert.Equal(Corner.TopLeft, p.Mark));
     }
 
+    [Fact]
+    public async Task Pages_are_cut_to_their_crop_box_and_turned_by_their_rotate_entry()
+    {
+        // Both pages are black outside an offset crop box and carry the mark in the crop box's own top-left: the label
+        // is a 6 x 4 in crop under /Rotate 270, the document a portrait Letter crop under /Rotate 90.
+        var label = Assert.Single(await PrintAsync(LabelQueue, Channel.Label,
+            Path.Combine("Fixtures", "label-cropped-rotated.pdf"), 1));
+        var document = Assert.Single(await PrintAsync(DocumentQueue, Channel.Document,
+            Path.Combine("Fixtures", "letter-cropped-rotated.pdf"), 1));
+
+        Assert.Equal(((288.0, 432.0), Corner.BottomLeft, false), (label.Size, label.Mark, label.InkOnEdges));
+        Assert.Equal(((792.0, 612.0), Corner.TopRight, false), (document.Size, document.Mark, document.InkOnEdges));
+    }
+
     private enum Corner { None, TopLeft, TopRight, BottomLeft, BottomRight, Several }
 
-    private sealed record OutputPage((double Width, double Height) Size, Corner Mark);
+    private sealed record OutputPage((double Width, double Height) Size, Corner Mark, bool InkOnEdges);
 
     private static async Task<IReadOnlyList<OutputPage>> PrintAsync(string queueName, Channel channel, string fixture, int copies)
     {
@@ -107,7 +121,8 @@ public sealed class DriverJobTests
             for (int i = 0; i < document.PageCount; i++)
             {
                 var (width, height) = document.PageSize(i);
-                pages.Add(new OutputPage((Math.Round(width), Math.Round(height)), await MarkAsync(document, i, width, height)));
+                var (mark, inkOnEdges) = await LookAsync(document, i, width, height);
+                pages.Add(new OutputPage((Math.Round(width), Math.Round(height)), mark, inkOnEdges));
             }
             return pages;
         }
@@ -115,8 +130,9 @@ public sealed class DriverJobTests
     }
 
     /// <summary>Which corner holds the solid mark: a point 0.6 in from each corner (inside the 1 in mark, clear of the
-    /// frame and the diagonal) is dark only in that one.</summary>
-    private static async Task<Corner> MarkAsync(SourceDocument document, int index, double width, double height)
+    /// frame and the diagonal) is dark only in that one. Also whether anything is drawn just inside the middle of an
+    /// edge.</summary>
+    private static async Task<(Corner Mark, bool InkOnEdges)> LookAsync(SourceDocument document, int index, double width, double height)
     {
         int w = (int)Math.Round(width / 2), h = (int)Math.Round(height / 2); // 36 px per inch
         byte[] pixels = await document.RenderAsync(index, new Placement(0, 0, w, h, false), 0, h);
@@ -126,6 +142,7 @@ public sealed class DriverJobTests
             (Corner.TopLeft, Dark(22, 22)), (Corner.TopRight, Dark(w - 23, 22)),
             (Corner.BottomLeft, Dark(22, h - 23)), (Corner.BottomRight, Dark(w - 23, h - 23)),
         }.Where(c => c.Item2).Select(c => c.Item1).ToList();
-        return dark.Count switch { 0 => Corner.None, 1 => dark[0], _ => Corner.Several };
+        bool inkOnEdges = Dark(w / 2, 3) || Dark(3, h / 2) || Dark(w - 4, h / 2) || Dark(w / 2, h - 4);
+        return (dark.Count switch { 0 => Corner.None, 1 => dark[0], _ => Corner.Several }, inkOnEdges);
     }
 }

@@ -184,10 +184,12 @@ Errors:
 | 500    | `PRINT_FAILED`        | the OS or the printer refused the job (`message` says) |
 
 Checks run in this order, the first failure answers: origin → channel → copies → size (a `Content-Length`
-over the limit is `413` at once; a body without one is counted as it is read) → `NO_PRINTER` →
-`PRINTER_UNAVAILABLE` → downloading (URL form) → opening the document → printing. A URL job takes its queue
-place when its JSON body is in; the download happens in the queue, so a batch of URL jobs still prints in
-arrival order. `title` is URL-decoded with `+` as a space.
+over the limit is `413` at once; a body without one is counted as it is read) → `BAD_URL` (URL form: judged
+as soon as the JSON is in, like `channel` and `copies`) → `NO_PRINTER` → `PRINTER_UNAVAILABLE` → downloading
+(URL form; nothing is fetched when the channel has no usable printer) → opening the document → printing. A
+URL job takes its queue place when its JSON body is in; the download happens in the queue, so a batch of URL
+jobs still prints in arrival order. A redirect from https to http is not followed. `FETCH_FAILED` messages
+read "<url> could not be downloaded: the server answered 404 Not Found." and the like. `title` is URL-decoded with `+` as a space.
 
 Anything else is `404` with code `NOT_FOUND` or `405` with code `METHOD_NOT_ALLOWED`, both with a `message`.
 

@@ -191,7 +191,9 @@ URL job takes its queue place when its JSON body is in; the download happens in 
 jobs still prints in arrival order. A redirect from https to http is not followed. `FETCH_FAILED` messages
 read "<url> could not be downloaded: the server answered 404 Not Found." and the like. `title` is URL-decoded with `+` as a space.
 
-Anything else is `404` with code `NOT_FOUND` or `405` with code `METHOD_NOT_ALLOWED`, both with a `message`.
+Anything else is `404` with code `NOT_FOUND` or `405` with code `METHOD_NOT_ALLOWED`, both with a `message`. An
+error the app did not expect (the OS print service down, say) is `500` with code `PRINT_FAILED` and a
+`message`; it never comes back as an empty response, and it keeps the CORS headers.
 
 ## Config file
 

@@ -28,5 +28,6 @@ swift run NodePrintApp          # strings stay English outside the app bundle
 
 - Label channel, ZPL queue (`docs/zpl.md`): pages are rendered at the queue's dpi, turned into `^GFA` ZPL and sent
   as a raw CUPS job.
-- Anything else goes through PDFKit with the paper set on the job: 4 × 6 in for labels (landscape pages turned
-  clockwise), Letter for documents (each page in its own orientation, fitted to the printable area).
+- Anything else is an AppKit print job through the driver, with the paper set on the job and each page placed by
+  `PageLayout`: 4 × 6 in for labels (landscape pages turned clockwise, fitted to the whole label), Letter for
+  documents (landscape pages printed landscape, fitted to the printable area).

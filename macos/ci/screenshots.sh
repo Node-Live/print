@@ -5,6 +5,13 @@ app=$1
 out=$2
 binary="$app/Contents/MacOS/NODE Print"
 mkdir -p "$out"
+crash_reports() {
+  for report in "$HOME"/Library/Logs/DiagnosticReports/NODE*; do
+    [ -e "$report" ] && head -c 8000 "$report"
+  done
+  return 0
+}
+trap crash_reports EXIT
 swiftc -O "$(dirname "$0")/window-id.swift" -o /tmp/window-id
 
 for language in en zh-Hans es; do
@@ -20,13 +27,13 @@ for language in en zh-Hans es; do
   sleep 2
   if [ -z "$id" ] || ! screencapture -o -x -l "$id" "$out/main-window-$language.png"; then
     echo "screencapture failed for $language; rendering the root view instead"
-    kill "$pid"
+    kill "$pid" 2> /dev/null || true
     wait "$pid" || true
     NODE_PRINT_SNAPSHOT="$out/main-window-$language-rendered.png" "$binary" -AppleLanguages "($language)" &
     pid=$!
     sleep 5
   fi
-  kill "$pid"
+  kill "$pid" 2> /dev/null || true
   wait "$pid" || true
 done
 
@@ -35,10 +42,7 @@ rm -rf "$HOME/Library/Application Support/NODE Print"
 NODE_PRINT_SNAPSHOT="$out/main-window-en-content@2x.png" "$binary" -AppleLanguages "(en)" &
 pid=$!
 sleep 5
-kill "$pid"
+kill "$pid" 2> /dev/null || true
 wait "$pid" || true
 ls -la "$out"
-for report in "$HOME"/Library/Logs/DiagnosticReports/NODE*; do
-  [ -e "$report" ] && head -c 6000 "$report"
-done
-true
+

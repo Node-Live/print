@@ -169,6 +169,7 @@ struct PrinterCard: View {
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
+        .onChange(of: choosing) { if choosing { model.refresh() } }
     }
 }
 

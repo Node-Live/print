@@ -33,12 +33,13 @@ struct MenuContent: View {
 }
 
 @MainActor
+@Observable
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private static let showWindowNotification = Notification.Name("live.node.print.show-window")
 
     private(set) var model: AppModel?
-    private var server: LocalServer?
-    private var window: NSWindow?
+    @ObservationIgnored private var server: LocalServer?
+    @ObservationIgnored private var window: NSWindow?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         if let id = Bundle.main.bundleIdentifier,
@@ -67,7 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         } catch {
             NSLog("NODE Print: cannot listen: %@", error.localizedDescription)
         }
-        showWindow()
+        if !launchedAsLoginItem { showWindow() }
         if let path = ProcessInfo.processInfo.environment["NODE_PRINT_SNAPSHOT"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.snapshot(model, to: URL(fileURLWithPath: path)) }
         }
@@ -82,6 +83,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         else { return }
         CGImageDestinationAddImage(destination, image, nil)
         CGImageDestinationFinalize(destination)
+    }
+
+    private var launchedAsLoginItem: Bool {
+        let event = NSAppleEventManager.shared().currentAppleEvent
+        return event?.eventID == kAEOpenApplication
+            && event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Application
+    x:Class="NodePrint.App.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    RequestedTheme="Light">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <Color x:Key="InkColor">#101114</Color>
+            <Color x:Key="SecondaryInkColor">#85858D</Color>
+            <Color x:Key="CardColor">#F2F2F4</Color>
+            <Color x:Key="CardHoverColor">#ECECEF</Color>
+            <Color x:Key="CardPressedColor">#E7E7EA</Color>
+            <Color x:Key="TileBorderColor">#E4E4E6</Color>
+            <Color x:Key="PillBorderColor">#E5E5E7</Color>
+            <Color x:Key="PillInkColor">#6E6E76</Color>
+
+            <SolidColorBrush x:Key="InkBrush" Color="{StaticResource InkColor}" />
+            <SolidColorBrush x:Key="SecondaryInkBrush" Color="{StaticResource SecondaryInkColor}" />
+            <SolidColorBrush x:Key="CardBrush" Color="{StaticResource CardColor}" />
+            <SolidColorBrush x:Key="CardHoverBrush" Color="{StaticResource CardHoverColor}" />
+            <SolidColorBrush x:Key="CardPressedBrush" Color="{StaticResource CardPressedColor}" />
+            <SolidColorBrush x:Key="TileBorderBrush" Color="{StaticResource TileBorderColor}" />
+            <SolidColorBrush x:Key="PillBorderBrush" Color="{StaticResource PillBorderColor}" />
+            <SolidColorBrush x:Key="PillInkBrush" Color="{StaticResource PillInkColor}" />
+
+            <FontFamily x:Key="IconFont">Segoe Fluent Icons,Segoe MDL2 Assets</FontFamily>
+
+            <Style x:Key="CaptionButtonStyle" TargetType="Button">
+                <Setter Property="Width" Value="46" />
+                <Setter Property="Height" Value="32" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+                <Setter Property="FontSize" Value="10" />
+                <Setter Property="Foreground" Value="#E4000000" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="IsTabStop" Value="False" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Grid x:Name="Root" Background="{TemplateBinding Background}">
+                                <ContentPresenter
+                                    x:Name="Glyph"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Content="{TemplateBinding Content}"
+                                    Foreground="{TemplateBinding Foreground}" />
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background" Value="#0A000000" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background" Value="#06000000" />
+                                                <Setter Target="Glyph.Foreground" Value="#9E000000" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="CloseCaptionButtonStyle" TargetType="Button" BasedOn="{StaticResource CaptionButtonStyle}">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Grid x:Name="Root" Background="{TemplateBinding Background}">
+                                <ContentPresenter
+                                    x:Name="Glyph"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Content="{TemplateBinding Content}"
+                                    Foreground="{TemplateBinding Foreground}" />
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background" Value="#C42B1C" />
+                                                <Setter Target="Glyph.Foreground" Value="#FFFFFF" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background" Value="#E6C42B1C" />
+                                                <Setter Target="Glyph.Foreground" Value="#B3FFFFFF" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="CardButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="{StaticResource CardBrush}" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="VerticalContentAlignment" Value="Stretch" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="18">
+                                <ContentPresenter
+                                    HorizontalContentAlignment="Stretch"
+                                    VerticalContentAlignment="Stretch"
+                                    Content="{TemplateBinding Content}" />
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background" Value="{StaticResource CardHoverBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background" Value="{StaticResource CardPressedBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="PrinterRowStyle" TargetType="Button">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Padding" Value="10,8,10,8" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalContentAlignment="Stretch" Content="{TemplateBinding Content}" />
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background" Value="{StaticResource CardBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background" Value="{StaticResource CardHoverBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

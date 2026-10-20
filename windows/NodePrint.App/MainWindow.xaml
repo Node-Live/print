@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="NodePrint.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:NodePrint.App">
+
+    <Grid x:Name="Root" Width="520" Height="372" HorizontalAlignment="Left" VerticalAlignment="Top">
+        <Border
+            x:Name="DragStrip"
+            Height="58"
+            VerticalAlignment="Top"
+            Background="Transparent"
+            PointerPressed="OnDragStripPressed" />
+
+        <Grid
+            HorizontalAlignment="Center"
+            VerticalAlignment="Top"
+            Margin="0,10,0,0"
+            Height="38"
+            IsHitTestVisible="False">
+            <Canvas x:Name="PillShadow" />
+            <Rectangle x:Name="PillShape" Fill="White" RadiusX="19" RadiusY="19" />
+            <StackPanel Orientation="Horizontal" Padding="7.75,0,15,0">
+                <Viewbox Width="26" Height="26" VerticalAlignment="Center">
+                    <Canvas Width="512" Height="512">
+                        <Canvas.Resources>
+                            <LinearGradientBrush x:Key="MarkBrush" MappingMode="Absolute" StartPoint="0,11" EndPoint="0,501">
+                                <GradientStop Offset="0" Color="#3B8EF3" />
+                                <GradientStop Offset="0.5" Color="#2BBFE0" />
+                                <GradientStop Offset="1" Color="#2DD4BF" />
+                            </LinearGradientBrush>
+                        </Canvas.Resources>
+                        <Path
+                            Data="M256,48 L80,152 L80,360 L256,464 L432,360 L432,152 Z"
+                            Stroke="{StaticResource MarkBrush}"
+                            StrokeThickness="31"
+                            StrokeLineJoin="Round" />
+                        <Path
+                            Data="M256,48 L256,464 M80,152 L256,256 L432,152 M80,360 L256,256 L432,360"
+                            Stroke="{StaticResource MarkBrush}"
+                            StrokeThickness="16"
+                            StrokeStartLineCap="Round"
+                            StrokeEndLineCap="Round"
+                            StrokeLineJoin="Round" />
+                        <Path Fill="{StaticResource MarkBrush}">
+                            <Path.Data>
+                                <GeometryGroup>
+                                    <EllipseGeometry Center="256,48" RadiusX="37" RadiusY="37" />
+                                    <EllipseGeometry Center="80,152" RadiusX="38" RadiusY="38" />
+                                    <EllipseGeometry Center="432,152" RadiusX="38" RadiusY="38" />
+                                    <EllipseGeometry Center="256,256" RadiusX="48" RadiusY="48" />
+                                    <EllipseGeometry Center="80,360" RadiusX="37" RadiusY="37" />
+                                    <EllipseGeometry Center="432,360" RadiusX="37" RadiusY="37" />
+                                    <EllipseGeometry Center="256,464" RadiusX="37" RadiusY="37" />
+                                </GeometryGroup>
+                            </Path.Data>
+                        </Path>
+                    </Canvas>
+                </Viewbox>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="9.25,0,0,0">
+                    <TextBlock
+                        Text="NODE"
+                        FontSize="13.5"
+                        FontWeight="SemiBold"
+                        CharacterSpacing="150"
+                        Foreground="{StaticResource InkBrush}"
+                        TextLineBounds="Tight"
+                        VerticalAlignment="Bottom" />
+                    <TextBlock
+                        Text="Print"
+                        Margin="10,0,0,0"
+                        FontSize="13.5"
+                        FontWeight="Medium"
+                        Foreground="{StaticResource InkBrush}"
+                        TextLineBounds="Tight"
+                        VerticalAlignment="Bottom" />
+                    <TextBlock
+                        x:Name="VersionText"
+                        Margin="7,0,0,0"
+                        FontSize="11"
+                        Foreground="{StaticResource SecondaryInkBrush}"
+                        TextLineBounds="Tight"
+                        VerticalAlignment="Bottom" />
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+            <Button x:Name="MinimizeButton" Style="{StaticResource CaptionButtonStyle}" Content="&#xE921;" Click="OnMinimize" />
+            <Button x:Name="CloseButton" Style="{StaticResource CloseCaptionButtonStyle}" Content="&#xE8BB;" Click="OnClose" />
+        </StackPanel>
+
+        <local:ChannelSection x:Name="LabelSection" Margin="20,68.5,20,0" VerticalAlignment="Top" />
+        <local:ChannelSection x:Name="DocumentSection" Margin="20,172.5,20,0" VerticalAlignment="Top" />
+    </Grid>
+</Window>

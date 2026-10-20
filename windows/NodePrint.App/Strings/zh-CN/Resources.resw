@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="LabelPrinter" xml:space="preserve">
+    <value>标签打印机</value>
+  </data>
+  <data name="LabelPrinterDetail" xml:space="preserve">
+    <value>快递面单 · 4 × 6 英寸</value>
+  </data>
+  <data name="DocumentPrinter" xml:space="preserve">
+    <value>文档打印机</value>
+  </data>
+  <data name="DocumentPrinterDetail" xml:space="preserve">
+    <value>拣货单和装箱单 · Letter</value>
+  </data>
+  <data name="StateReady" xml:space="preserve">
+    <value>就绪</value>
+  </data>
+  <data name="StateBusy" xml:space="preserve">
+    <value>正在打印</value>
+  </data>
+  <data name="StatePaused" xml:space="preserve">
+    <value>已暂停</value>
+  </data>
+  <data name="StateOffline" xml:space="preserve">
+    <value>离线</value>
+  </data>
+  <data name="StateError" xml:space="preserve">
+    <value>出错</value>
+  </data>
+  <data name="StateMissing" xml:space="preserve">
+    <value>找不到</value>
+  </data>
+  <data name="StateNone" xml:space="preserve">
+    <value>未选择</value>
+  </data>
+  <data name="Thermal" xml:space="preserve">
+    <value>热敏</value>
+  </data>
+  <data name="ChoosePrinter" xml:space="preserve">
+    <value>选择打印机</value>
+  </data>
+  <data name="ConnectionUsb" xml:space="preserve">
+    <value>USB</value>
+  </data>
+  <data name="ConnectionNetwork" xml:space="preserve">
+    <value>网络</value>
+  </data>
+  <data name="ConnectionBluetooth" xml:space="preserve">
+    <value>蓝牙</value>
+  </data>
+  <data name="Paper4x6" xml:space="preserve">
+    <value>4 × 6 英寸</value>
+  </data>
+  <data name="PaperLetter" xml:space="preserve">
+    <value>Letter</value>
+  </data>
+  <data name="NoPrinters" xml:space="preserve">
+    <value>没有找到打印机</value>
+  </data>
+  <data name="TrayOpen" xml:space="preserve">
+    <value>打开 NODE Print</value>
+  </data>
+  <data name="TrayLaunchAtLogin" xml:space="preserve">
+    <value>登录时启动</value>
+  </data>
+  <data name="TrayQuit" xml:space="preserve">
+    <value>退出</value>
+  </data>
+  <data name="Minimize" xml:space="preserve">
+    <value>最小化</value>
+  </data>
+  <data name="Close" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+</root>

@@ -1,0 +1,11 @@
+{
+  "name": "runs of single and repeated digits inside a row",
+  "dpi": 203,
+  "width": 32, "length": 3,
+  "rows": [
+    "A5FF0081",
+    "12340000",
+    "0000FFFF"
+  ],
+  "data": "A5HFH0811234,J0!"
+}

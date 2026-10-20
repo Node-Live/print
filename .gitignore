@@ -8,3 +8,5 @@
 /macos/**/*.xcodeproj/project.xcworkspace/xcuserdata/
 /macos/DerivedData/
 /dist/
+
+/macos/dist/

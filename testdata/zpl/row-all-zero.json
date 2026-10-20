@@ -1,0 +1,9 @@
+{
+  "name": "a row of only 0 is a single comma",
+  "dpi": 203,
+  "width": 32, "length": 1,
+  "rows": [
+    "00000000"
+  ],
+  "data": ","
+}

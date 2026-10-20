@@ -79,14 +79,8 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: NodePrint-windows-screenshots-design
+          name: NodePrint-windows-screenshots
           path: artifacts/run/design-*.png
-
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: NodePrint-windows-screenshots-native
-          path: artifacts/run/native-*.png
 
       - uses: actions/upload-artifact@v7
         if: always()

@@ -23,9 +23,10 @@ Every job goes through the printer's driver: each page of the PDF (`Windows.Data
 at the printer's resolution for the printable area and drawn through GDI, on a DEVMODE that is the driver's own with
 the paper (4 × 6 in or Letter) and orientation set; a label job stops when the driver did not take 4 × 6 in.
 
-Two window styles exist while they are being compared: `--style design` (the default, after `docs/design/`) and
-`--style native` (WinUI's own controls and styles). `--tray` starts in the tray, as the Run key does.
+`--tray` starts the app in the tray, as the Run key does.
+
+A print request carries the document itself or, as JSON `{"url": …}`, a URL the app downloads in the channel's queue.
 
 CI (`.github/workflows/windows.yml`) builds, tests, publishes, packs `Setup.exe` and the portable zip, then points two
-"Microsoft Print to PDF" queues at file ports, runs the app against them, takes screenshots and checks the pages that
-come out.
+"Microsoft Print to PDF" queues at file ports, runs the app against them (bytes and URL forms), takes screenshots and
+checks the pages that come out.

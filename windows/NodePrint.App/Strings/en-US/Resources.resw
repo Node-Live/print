@@ -87,7 +87,4 @@
   <data name="PortInUse" xml:space="preserve">
     <value>Port 19233 is in use</value>
   </data>
-  <data name="Version" xml:space="preserve">
-    <value>Version {0}</value>
-  </data>
 </root>

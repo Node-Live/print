@@ -87,7 +87,4 @@
   <data name="PortInUse" xml:space="preserve">
     <value>端口 19233 被占用</value>
   </data>
-  <data name="Version" xml:space="preserve">
-    <value>版本 {0}</value>
-  </data>
 </root>

@@ -1,5 +1,5 @@
-# Starts the published app against the CI queues, takes screenshots of both window styles, prints through the local
-# API and checks what comes out.
+# Starts the published app against the CI queues, takes screenshots, prints through the local API (bytes and URL
+# forms) and checks what comes out.
 param(
     [string] $App = 'dist/app/NodePrint.exe',
     [string] $Out = 'artifacts/run'
@@ -95,8 +95,8 @@ function Invoke-Click($window, [double] $x, [double] $y) {
     [Screen]::mouse_event(0x2, 0, 0, 0, [IntPtr]::Zero); [Screen]::mouse_event(0x4, 0, 0, 0, [IntPtr]::Zero)
 }
 
-function Start-App([string[]] $arguments) {
-    if ($arguments) { Start-Process $App -ArgumentList $arguments -PassThru } else { Start-Process $App -PassThru }
+function Start-App {
+    Start-Process $App -PassThru
 }
 
 function Get-PdfPages([string] $path) {
@@ -109,7 +109,12 @@ function Get-PdfPages([string] $path) {
 
 function Invoke-Print([string] $channel, [string] $file, [string] $type, [string] $output, [string[]] $expected) {
     Remove-Item $output -ErrorAction SilentlyContinue
-    $response = Invoke-WebRequest -Method Post -Uri "$api/print?channel=$channel&title=CI+$channel" -ContentType $type -InFile $file -SkipHttpErrorCheck
+    $uri = "$api/print?channel=$channel&title=CI+$channel"
+    $response = if ($type -eq 'url') {
+        Invoke-WebRequest -Method Post -Uri $uri -ContentType 'application/json' -Body (@{ url = $file } | ConvertTo-Json) -SkipHttpErrorCheck
+    } else {
+        Invoke-WebRequest -Method Post -Uri $uri -ContentType $type -InFile $file -SkipHttpErrorCheck
+    }
     "$channel $type -> $($response.StatusCode) $($response.Content)"
     if ($response.StatusCode -ne 200) { $failures.Add("print $channel $type answered $($response.StatusCode)"); return }
     $deadline = (Get-Date).AddSeconds(60)
@@ -118,7 +123,7 @@ function Invoke-Print([string] $channel, [string] $file, [string] $type, [string
         Start-Sleep -Milliseconds 500
         try { $stream = [IO.File]::Open($output, 'Open', 'Read', 'None'); $stream.Dispose(); $pages = @(Get-PdfPages $output) } catch { }
     }
-    $name = "app-$channel-$([IO.Path]::GetFileNameWithoutExtension($file))"
+    $name = "app-$channel-$type-$([IO.Path]::GetFileNameWithoutExtension($file))".Replace('/', '-')
     if (Test-Path $output) { Copy-Item $output (Join-Path $Out "$name.pdf") }
     "$name pages: $($pages -join ', ') (expected $($expected -join ', '))"
     if (($pages -join ',') -ne ($expected -join ',')) { $failures.Add("$name came out as $($pages -join ', ')") }
@@ -126,7 +131,7 @@ function Invoke-Print([string] $channel, [string] $file, [string] $type, [string
 
 # The designed window against the CI queues.
 Write-Config 'NODE CI Label' 'NODE CI Document'
-$process = Start-App @()
+$process = Start-App
 $status = Wait-Api $process 90
 if (-not $status) {
     Get-Content (Join-Path $configDir 'error.log') -ErrorAction SilentlyContinue
@@ -156,6 +161,15 @@ Invoke-Print 'label' 'testdata/zpl/border-4x6-203.pdf' 'application/pdf' 'C:\nod
 Invoke-Print 'label' 'windows/NodePrint.Printing.Tests/Fixtures/label-landscape.png' 'image/png' 'C:\nodeprint-ci\label.pdf' @('288x432')
 Invoke-Print 'document' 'windows/NodePrint.Printing.Tests/Fixtures/letter-mixed.pdf' 'application/pdf' 'C:\nodeprint-ci\document.pdf' @('612x792', '792x612')
 
+# The URL form: the app downloads the label itself, here from a file server on the loopback.
+$files = Start-Process python -ArgumentList '-m', 'http.server', '8099', '--bind', '127.0.0.1', '--directory', 'testdata/zpl' -PassThru -WindowStyle Hidden
+Start-Sleep -Seconds 2
+Invoke-Print 'label' 'http://127.0.0.1:8099/border-4x6-203.pdf' 'url' 'C:\nodeprint-ci\label.pdf' @('288x432')
+$missing = Invoke-WebRequest -Method Post -Uri "$api/print?channel=label" -ContentType 'application/json' -Body '{"url":"http://127.0.0.1:8099/missing.pdf"}' -SkipHttpErrorCheck
+"missing url -> $($missing.StatusCode) $($missing.Content)"
+if ($missing.StatusCode -ne 502) { $failures.Add('FETCH_FAILED not returned') }
+Stop-Process -Id $files.Id
+
 $bad = Invoke-WebRequest -Method Post -Uri "$api/print?channel=nope" -ContentType 'application/pdf' -InFile 'testdata/zpl/border-4x6-203.pdf' -SkipHttpErrorCheck
 "bad channel -> $($bad.StatusCode) $($bad.Content)"
 if ($bad.StatusCode -ne 400) { $failures.Add('BAD_CHANNEL not returned') }
@@ -167,7 +181,7 @@ $preflight = Invoke-WebRequest -Method Options -Uri "$api/anything" -Headers @{ 
 if ($preflight.StatusCode -ne 204) { $failures.Add('preflight failed') }
 
 # A second launch hands over to the running copy and exits.
-$second = Start-App @()
+$second = Start-App
 if ($second.WaitForExit(20000)) { "second instance exited with $($second.ExitCode); first still running: $(-not $process.HasExited)" }
 else { $failures.Add('a second instance kept running'); Stop-Process -Id $second.Id }
 $run = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'NODE Print' -ErrorAction SilentlyContinue
@@ -175,45 +189,27 @@ $run = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -N
 if ($run) { $failures.Add('Run key written although launchAtLogin is false') }
 Stop-Process -Id $process.Id
 
-# Both styles in the other states: a network printer, a printer that is gone, nothing chosen.
-foreach ($style in 'design', 'native') {
-    $arguments = if ($style -eq 'native') { @('--style', 'native') } else { @() }
-    foreach ($state in @(@('main-window', 'NODE CI Label', 'NODE CI Document'), @('states-network', 'NODE CI Network', 'NODE CI Document'),
-                         @('states-missing', 'Gone Printer', $null))) {
-        if ($style -eq 'design' -and $state[0] -eq 'main-window') { continue }
-        Write-Config $state[1] $state[2]
-        $process = Start-App $arguments
-        if (Wait-Api $process 30) {
-            $window = Find-Window $process
-            Save-Window $window "$style-$($state[0])"
-            if ($style -eq 'native' -and $state[0] -eq 'main-window') {
-                Invoke-Click $window 260 125
-                Start-Sleep -Seconds 2
-                Save-Window $window 'native-printer-list' 200
-                [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
-            }
-        }
-        else { $failures.Add("$style $($state[0]) did not start") }
-        Stop-Process -Id $process.Id
-        Start-Sleep -Seconds 1
-    }
+# The other card states: a network printer, a printer that is gone, nothing chosen.
+foreach ($state in @(@('states-network', 'NODE CI Network', 'NODE CI Document'), @('states-missing', 'Gone Printer', $null))) {
+    Write-Config $state[1] $state[2]
+    $process = Start-App
+    if (Wait-Api $process 30) { Save-Window (Find-Window $process) "design-$($state[0])" }
+    else { $failures.Add("$($state[0]) did not start") }
+    Stop-Process -Id $process.Id
+    Start-Sleep -Seconds 1
 }
 
 # Something else holds the port: the window says so, and the app takes the port once it is free.
 Write-Config 'NODE CI Label' 'NODE CI Document'
-foreach ($style in 'design', 'native') {
-    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 19233)
-    $listener.Start()
-    $arguments = if ($style -eq 'native') { @('--style', 'native') } else { @() }
-    $process = Start-App $arguments
-    $window = Find-Window $process
-    Start-Sleep -Seconds 3
-    Save-Window $window "$style-port-in-use"
-    $listener.Stop()
-    if (Wait-Api $process 20) { "$style took the port once it was free" } else { $failures.Add("$style never took the freed port") }
-    Stop-Process -Id $process.Id
-    Start-Sleep -Seconds 1
-}
+$listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 19233)
+$listener.Start()
+$process = Start-App
+$window = Find-Window $process
+Start-Sleep -Seconds 3
+Save-Window $window 'design-port-in-use'
+$listener.Stop()
+if (Wait-Api $process 20) { 'took the port once it was free' } else { $failures.Add('never took the freed port') }
+Stop-Process -Id $process.Id
 
 Get-Content (Join-Path $configDir 'error.log') -ErrorAction SilentlyContinue
 if ($failures.Count -gt 0) { throw ($failures -join '; ') }

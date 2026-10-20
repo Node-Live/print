@@ -9,18 +9,14 @@ public partial class App : Application
 {
     private static readonly TimeSpan PortRetry = TimeSpan.FromSeconds(5);
 
-    // Which of the two windows to show while the user compares them: --style native or --style design (the default).
-    private readonly bool native = StyleArgument() == "native";
     private readonly CancellationTokenSource quitting = new();
-    private MainWindow? designWindow;
-    private NativeWindow? nativeWindow;
+    private MainWindow? window;
     private TrayIcon? tray;
     private WebApplication? server;
     private volatile bool portInUse;
 
     public App()
     {
-        if (!native) RequestedTheme = ApplicationTheme.Light;
         InitializeComponent();
         UnhandledException += (_, e) => ErrorLog.Write(e.Exception);
     }
@@ -30,18 +26,8 @@ public partial class App : Application
         var service = await Task.Run(() => PrintService.Open(new WindowsPrintBackend(), new ConfigStore(ConfigStore.DefaultPath)));
         LaunchAtLogin.Apply(service.LaunchAtLogin);
 
-        Windows.Win32.Foundation.HWND handle;
-        if (native)
-        {
-            nativeWindow = new NativeWindow(service, () => portInUse);
-            handle = nativeWindow.Handle;
-        }
-        else
-        {
-            designWindow = new MainWindow(service, () => portInUse);
-            handle = designWindow.Handle;
-        }
-        tray = new TrayIcon(handle, () => service.LaunchAtLogin);
+        window = new MainWindow(service, () => portInUse);
+        tray = new TrayIcon(window.Handle, () => service.LaunchAtLogin);
         tray.OpenRequested += BringToFront;
         tray.LaunchAtLoginToggled += () =>
         {
@@ -54,11 +40,7 @@ public partial class App : Application
         if (!Environment.GetCommandLineArgs().Contains(LaunchAtLogin.TrayArgument)) BringToFront();
     }
 
-    public void BringToFront()
-    {
-        designWindow?.ShowAndActivate();
-        nativeWindow?.ShowAndActivate();
-    }
+    public void BringToFront() => window?.ShowAndActivate();
 
     /// <summary>Starts the local server, and while something else holds the port keeps the window saying so and
     /// tries again every few seconds.</summary>
@@ -97,15 +79,7 @@ public partial class App : Application
         quitting.Cancel();
         tray?.Dispose();
         if (server is not null) await server.StopAsync();
-        designWindow?.CloseForQuit();
-        nativeWindow?.CloseForQuit();
+        window?.CloseForQuit();
         Exit();
-    }
-
-    private static string? StyleArgument()
-    {
-        var args = Environment.GetCommandLineArgs();
-        int at = Array.IndexOf(args, "--style");
-        return at >= 0 && at + 1 < args.Length ? args[at + 1] : null;
     }
 }

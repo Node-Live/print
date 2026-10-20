@@ -67,8 +67,8 @@ What the browser side has to live with (the app only needs the headers above):
 - `platform`: `"windows"` or `"macos"`.
 - `channels.<name>.printer`: the chosen printer, or `null` when none is chosen. When the chosen printer is
   no longer installed (`state` `"missing"`) it is a placeholder so the web can still name it: `id` and `name`
-  both the configured id, `model` `""`, `connection` `"other"`, `kind` `"other"`, `papers` `[]`, `language`
-  `"driver"`, `dpi` `0`, `state` `"offline"`, `default` `false`.
+  both the configured id, `model` `""`, `connection` `"other"`, `kind` `"other"`, `papers` `[]`, `dpi` `0`,
+  `state` `"offline"`, `default` `false`.
 - `channels.<name>.state`: `"ready"`, `"busy"` (the queue is printing), `"paused"`, `"offline"`, `"error"`,
   `"missing"` (chosen printer no longer installed) or `"none"` (nothing chosen).
 
@@ -111,9 +111,10 @@ rest, each group by name.
   `""` when unknown.
 - `connection`: `"usb"`, `"network"`, `"bluetooth"` or `"other"`. Say `"network"` whenever a printer is
   reached over IP; the OS does not tell Wi-Fi from Ethernet, so the app does not claim to.
-- `kind`: `"thermal"` for a label printer, `"other"` otherwise. A label printer is a queue whose largest
-  paper (by area, among the sizes the driver reports) has a short edge of at most 4.25 in (108 mm). Nothing
-  else is guessed: no "laser", no "inkjet".
+- `kind`: `"thermal"` for a label printer, `"other"` otherwise. A label printer is a queue whose driver
+  reports at least one paper with a short edge of at most 4.25 in (108 mm) and reports neither Letter nor A4
+  (office printers always list one of those; label drivers list none, even when they also list wide sizes
+  for other models). Nothing else is guessed: no "laser", no "inkjet".
 - `papers`: which of `"4x6"`, `"Letter"`, `"A4"` the driver reports. May be empty, which only means none of
   the three was listed, not that the printer refuses custom sizes.
 - `dpi`: the queue's current print resolution as the driver reports it, `0` when unknown.

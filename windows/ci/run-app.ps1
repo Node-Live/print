@@ -157,19 +157,25 @@ if ($run) { $failures.Add('Run key written although launchAtLogin is false') }
 
 Stop-Process -Id $process.Id
 
-# The other card states: a chosen printer that is gone, and nothing chosen.
-@{ channels = @{ label = 'Gone Printer'; document = $null }; allowedOrigins = @(); launchAtLogin = $false } |
-    ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $configDir 'config.json')
-$process = Start-Process $App -PassThru
-Start-Sleep -Seconds 6
-$window = [IntPtr]::Zero
-[Screen]::Describe([uint32]$process.Id, [ref] $window) | Out-Null
-if ($window -ne [IntPtr]::Zero) {
-    [Screen]::SetForegroundWindow($window) | Out-Null
-    Start-Sleep -Seconds 2
-    [Screen]::DwmGetWindowAttribute($window, 9, [ref] $rect, 16) | Out-Null
-    Save-Screen $rect.Left $rect.Top ($rect.Right - $rect.Left) ($rect.Bottom - $rect.Top) (Join-Path $Out 'states.png')
+# The other card states: a network printer, a chosen printer that is gone, nothing chosen.
+$states = @(
+    @{ name = 'states-network'; label = 'NODE CI Network'; document = 'NODE CI Document' },
+    @{ name = 'states-missing'; label = 'Gone Printer'; document = $null }
+)
+foreach ($state in $states) {
+    @{ channels = @{ label = $state.label; document = $state.document }; allowedOrigins = @(); launchAtLogin = $false } |
+        ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $configDir 'config.json')
+    $process = Start-Process $App -PassThru
+    Start-Sleep -Seconds 6
+    $window = [IntPtr]::Zero
+    [Screen]::Describe([uint32]$process.Id, [ref] $window) | Out-Null
+    if ($window -ne [IntPtr]::Zero) {
+        [Screen]::SetForegroundWindow($window) | Out-Null
+        Start-Sleep -Seconds 2
+        [Screen]::DwmGetWindowAttribute($window, 9, [ref] $rect, 16) | Out-Null
+        Save-Screen $rect.Left $rect.Top ($rect.Right - $rect.Left) ($rect.Bottom - $rect.Top) (Join-Path $Out "$($state.name).png")
+    }
+    Stop-Process -Id $process.Id
 }
-Stop-Process -Id $process.Id
 
 if ($failures.Count -gt 0) { throw ($failures -join '; ') }

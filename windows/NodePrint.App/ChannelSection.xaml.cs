@@ -14,7 +14,7 @@ public sealed partial class ChannelSection : UserControl
     public ChannelSection()
     {
         InitializeComponent();
-        Loaded += (_, _) => Shadows.Attach(TileShadow, TileShape, blur: 1.5f, offsetY: 1, opacity: 0.06f);
+        Loaded += (_, _) => Shadows.Attach(TileShadow, TileShape, (1, 1, 0.07f));
     }
 
     /// <summary>Raised after the user picked a printer from the list.</summary>

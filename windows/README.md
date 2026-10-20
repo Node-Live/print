@@ -16,7 +16,12 @@ with Velopack.
 The version is `Version` in `Directory.Build.props`; the window, `GET /status` and the installer all show it.
 
 Config lives in `%LOCALAPPDATA%\NODE Print\config.json` (see `docs/protocol.md`); it is read at start, so restart the
-app after editing it by hand.
+app after editing it by hand. Unexpected failures (including the port being taken by another program) are appended to
+`error.log` in the same folder.
+
+Labels for ZPL printers go out as raw ZPL (`docs/zpl.md`). Every other job goes through the driver as XPS: the PDF
+renderer draws each page as vectors into a Direct2D print control, with a PrintTicket made from the driver's own DEVMODE
+with the paper (4 × 6 in or Letter) and orientation set.
 
 CI (`.github/workflows/windows.yml`) builds, tests, publishes, packs `Setup.exe` and the portable zip, then points two
 "Microsoft Print to PDF" queues at file ports, runs the app against them, takes screenshots and checks the pages that

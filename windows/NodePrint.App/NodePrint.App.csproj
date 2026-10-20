@@ -15,10 +15,7 @@
     <UseWinUI>true</UseWinUI>
     <EnableMsixTooling>true</EnableMsixTooling>
     <WindowsPackageType>None</WindowsPackageType>
-    <!-- Framework-dependent: the Windows App Runtime is Microsoft's shared install, found at start by RuntimeSetup. -->
-    <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
-    <WindowsAppSdkBootstrapInitialize>false</WindowsAppSdkBootstrapInitialize>
-    <WindowsAppSdkIncludeVersionInfo>true</WindowsAppSdkIncludeVersionInfo>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
     <PublishAot>true</PublishAot>
     <OptimizationPreference>Size</OptimizationPreference>
@@ -31,9 +28,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- The components of Windows App SDK 2.5.1 the app uses; the full package also brings its AI and ML parts, whose
-         onnxruntime and DirectML get copied next to the app even when the runtime is not carried. -->
-    <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" Version="2.5.1" />
+    <!-- The components of Windows App SDK 2.5.1 the app uses; the full package would also carry its AI, ML, search and
+         widgets parts (onnxruntime, DirectML …). -->
     <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.3.9" />
     <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" Version="2.3.12" />
     <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="2.1.9" />
@@ -50,16 +46,20 @@
     <Content Include="Assets\NodePrint.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <!-- The installer carries only what runs: no symbols, and none of the pieces packages drop in for features the app
-       does not use (WebView2, the IIS module of ASP.NET Core, Windows App SDK background tasks). -->
+  <!-- The installer carries only what runs: no symbols; none of the files packages drop in for features the app does
+       not use (WebView2, the IIS module of ASP.NET Core, background tasks, push notifications, packaged deployment,
+       restart, the XAML designer, phone controls, map assets, WinRT metadata); and of the runtime's translations only
+       the app's own three languages. -->
   <PropertyGroup>
-    <UnusedPublishFiles>;Microsoft.Web.WebView2.Core.dll;WebView2Loader.dll;aspnetcorev2_inprocess.dll;Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.dll;</UnusedPublishFiles>
+    <UnusedPublishFiles>;Microsoft.Web.WebView2.Core.dll;WebView2Loader.dll;aspnetcorev2_inprocess.dll;Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.dll;PushNotificationsLongRunningTask.ProxyStub.dll;DeploymentAgent.exe;RestartAgent.exe;Microsoft.UI.Designer.dll;Microsoft.UI.Xaml.Phone.dll;map.html;</UnusedPublishFiles>
+    <KeptLanguages>;en-US;zh-CN;es-ES;</KeptLanguages>
   </PropertyGroup>
   <Target Name="LeaveUnusedOutOfPublish" AfterTargets="ComputeResolvedFilesToPublishList">
     <ItemGroup>
-      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.pdb'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.pdb' or '%(Extension)' == '.winmd'" />
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$(UnusedPublishFiles.Contains(';%(Filename)%(Extension);'))" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="'%(Extension)' == '.mui' and !$(KeptLanguages.Contains(';$([System.IO.Path]::GetFileName($([System.IO.Path]::GetDirectoryName(%(RelativePath)))));'))" />
     </ItemGroup>
   </Target>
-
 </Project>

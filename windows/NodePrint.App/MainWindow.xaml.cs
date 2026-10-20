@@ -54,7 +54,7 @@ public sealed partial class MainWindow : Window
         Root.Loaded += (_, _) =>
         {
             FitContent();
-            Shadows.Attach(PillShadow, PillShape, blur: 22, offsetY: 4, opacity: 0.11f);
+            Shadows.Attach(PillShadow, PillShape, blur: 24, offsetY: 5, opacity: 0.10f);
             SetDragRegion();
             Root.XamlRoot.Changed += (_, _) => SetDragRegion();
         };

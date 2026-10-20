@@ -22,7 +22,7 @@
                 TextLineBounds="Tight"
                 VerticalAlignment="Bottom" />
         </StackPanel>
-        <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="0,0,5,0">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="0,0,6,0">
             <Ellipse x:Name="StateDot" Width="6" Height="6" Margin="0,3.5,6,0" VerticalAlignment="Top" />
             <TextBlock
                 x:Name="StateText"
@@ -42,7 +42,15 @@
             Click="OnCardClick">
             <FlyoutBase.AttachedFlyout>
                 <Flyout x:Name="Picker" Placement="BottomEdgeAlignedRight" ShouldConstrainToRootBounds="False">
-                    <StackPanel x:Name="PickerList" Width="340" Spacing="2" />
+                    <StackPanel Width="340">
+                        <TextBlock
+                            x:Name="NoPrintersText"
+                            Margin="10,8,10,8"
+                            FontSize="13"
+                            Foreground="{StaticResource SecondaryInkBrush}"
+                            Visibility="Collapsed" />
+                        <StackPanel x:Name="PickerList" Spacing="2" />
+                    </StackPanel>
                 </Flyout>
             </FlyoutBase.AttachedFlyout>
             <Grid>

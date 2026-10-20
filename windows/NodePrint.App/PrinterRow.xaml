@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="NodePrint.App.PrinterRow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Button x:Name="RowButton" Style="{StaticResource PrinterRowStyle}">
+        <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <FontIcon
+                x:Name="Check"
+                Glyph="&#xE73E;"
+                FontFamily="{StaticResource IconFont}"
+                FontSize="12"
+                Foreground="{StaticResource InkBrush}"
+                Visibility="Collapsed" />
+            <TextBlock
+                x:Name="NameText"
+                Grid.Column="1"
+                FontSize="13"
+                FontWeight="Medium"
+                Foreground="{StaticResource InkBrush}"
+                TextTrimming="CharacterEllipsis"
+                VerticalAlignment="Center" />
+            <TextBlock
+                x:Name="ConnectionText"
+                Grid.Column="2"
+                FontSize="12"
+                Foreground="{StaticResource SecondaryInkBrush}"
+                VerticalAlignment="Center" />
+            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Ellipse x:Name="StateDot" Width="6" Height="6" VerticalAlignment="Center" />
+                <TextBlock x:Name="StateText" FontSize="12" />
+            </StackPanel>
+        </Grid>
+    </Button>
+</UserControl>

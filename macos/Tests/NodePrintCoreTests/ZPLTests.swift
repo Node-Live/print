@@ -64,13 +64,13 @@ func rendersTheLabelPageToTheVectorDots(name: String) throws {
     let vector = try JSONDecoder().decode(Vector.self, from: Data(contentsOf: directory.appending(path: "\(name).json")))
     let document = try #require(CGPDFDocument(directory.appending(path: "\(name).pdf") as CFURL))
     let page = try #require(document.page(at: 1))
-    #expect(PageLayout.labelBitmap(page, dpi: vector.dpi) == vector.bitmap)
+    #expect(ZPL.labelBitmap(page, dpi: vector.dpi) == vector.bitmap)
 }
 
 @Test func sizesTheLabelAtTheReportedResolution() throws {
     let url = repository.appending(path: "testdata/zpl/blank-4x6-203.pdf")
     let page = try #require(CGPDFDocument(url as CFURL)?.page(at: 1))
-    let bitmap = PageLayout.labelBitmap(page, dpi: 300)
+    let bitmap = ZPL.labelBitmap(page, dpi: 300)
     #expect(bitmap.width == 1200)
     #expect(bitmap.length == 1800)
     #expect(bitmap.bytesPerRow == 150)

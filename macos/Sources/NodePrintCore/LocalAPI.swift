@@ -58,7 +58,7 @@ public struct Response: Sendable {
 
 /// The local HTTP contract of `docs/protocol.md`, independent of the socket that carries it.
 public final class LocalAPI: Sendable {
-    public static let maxBodyBytes = 50 * 1024 * 1024
+    public static let maxBodyBytes = 52_428_800
     static let builtInOrigins = ["https://nrp.node.live", "http://localhost:5173", "http://127.0.0.1:5173"]
 
     private let system: any PrintSystem
@@ -72,16 +72,31 @@ public final class LocalAPI: Sendable {
     }
 
     /// The answer when the request line and headers already decide it, so the body need not be read.
-    public func response(to head: RequestHead, contentLength: Int) -> Response? {
+    /// `contentLength` is `nil` for a body of unknown length.
+    public func response(to head: RequestHead, contentLength: Int?) -> Response? {
+        if let origin = head.headers["origin"], !allows(origin) {
+            return .error(403, "FORBIDDEN_ORIGIN", "\(origin) may not use NODE Print.")
+        }
         if let early = routeResponse(head) ?? printHeadResponse(head, contentLength: contentLength) {
             return withCORS(early, head)
         }
         return nil
     }
 
+    /// The answer for a body that grew past the limit while it was read.
+    public func tooLarge(_ head: RequestHead) -> Response {
+        withCORS(Self.tooLarge, head)
+    }
+
+    private static let tooLarge = Response.error(413, "TOO_LARGE", "The document is larger than 52,428,800 bytes.")
+
     public func response(to head: RequestHead, body: Data) async -> Response {
         if let early = response(to: head, contentLength: body.count) { return early }
         return withCORS(await route(head, body: body), head)
+    }
+
+    private func allows(_ origin: String) -> Bool {
+        Self.builtInOrigins.contains(origin) || config.config.allowedOrigins.contains(origin)
     }
 
     private func routeResponse(_ head: RequestHead) -> Response? {
@@ -96,13 +111,13 @@ public final class LocalAPI: Sendable {
         return nil
     }
 
-    private func printHeadResponse(_ head: RequestHead, contentLength: Int) -> Response? {
+    private func printHeadResponse(_ head: RequestHead, contentLength: Int?) -> Response? {
         guard head.path == "/print" else { return nil }
         guard Channel(rawValue: head.query["channel"] ?? "") != nil else {
             return .error(400, "BAD_CHANNEL", "channel must be label or document.")
         }
         guard copies(head) != nil else { return .error(400, "BAD_COPIES", "copies must be a whole number from 1 to 99.") }
-        if contentLength > Self.maxBodyBytes { return .error(413, "TOO_LARGE", "The PDF is larger than 50 MB.") }
+        if let contentLength, contentLength > Self.maxBodyBytes { return Self.tooLarge }
         return nil
     }
 
@@ -130,47 +145,45 @@ public final class LocalAPI: Sendable {
         }
     }
 
+    /// The body is in: the job takes its place in the channel's queue now, on the printer chosen now.
     private func print(_ head: RequestHead, body: Data) async -> Response {
         let channel = Channel(rawValue: head.query["channel"] ?? "")!
-        let title = head.query["title"].flatMap { $0.isEmpty ? nil : $0 } ?? (channel == .label ? "NODE label" : "NODE document")
-        guard let job = PrintJob(channel: channel, pdf: body, copies: copies(head)!, title: title) else {
-            return .error(400, "BAD_DOCUMENT", "The body is not a PDF with at least one page.")
-        }
-        let system = system
-        let config = config
-        return await withCheckedContinuation { continuation in
-            queues[channel]!.async {
-                continuation.resume(returning: Self.run(job, system: system, chosen: config.config.channels[channel]))
-            }
-        }
-    }
-
-    private static func run(_ job: PrintJob, system: any PrintSystem, chosen id: String?) -> Response {
-        guard let id else {
-            return .error(409, "NO_PRINTER", "No \(job.channel.rawValue) printer is chosen in NODE Print.")
+        guard let id = config.config.channels[channel] else {
+            return .error(409, "NO_PRINTER", "No \(channel.rawValue) printer is chosen in NODE Print.")
         }
         guard let printer = system.printers().first(where: { $0.id == id }) else {
             return .error(409, "PRINTER_UNAVAILABLE", "\(id) is not installed.")
         }
-        if printer.state == .offline || printer.state == .paused {
-            return .error(409, "PRINTER_UNAVAILABLE", "\(printer.name) is \(printer.state.rawValue).")
+        guard printer.state == .ready || printer.state == .busy else {
+            return .error(409, "PRINTER_UNAVAILABLE", "\(printer.name) is \(printer.state == .error ? "in error" : printer.state.rawValue).")
         }
+        let title = head.query["title"].flatMap { $0.isEmpty ? nil : $0 } ?? (channel == .label ? "NODE label" : "NODE document")
+        guard let job = PrintJob(channel: channel, body: body, copies: copies(head)!, title: title) else {
+            return .error(400, "BAD_DOCUMENT", "The body is not a PDF, PNG or JPEG with at least one page.")
+        }
+        let system = system
+        return await withCheckedContinuation { continuation in
+            queues[channel]!.async {
+                continuation.resume(returning: Self.run(job, on: printer, system: system))
+            }
+        }
+    }
+
+    private static func run(_ job: PrintJob, on printer: Printer, system: any PrintSystem) -> Response {
         do {
             try system.print(job, on: printer)
         } catch {
             return .error(500, "PRINT_FAILED", error.message)
         }
         return Response(status: 200, json: ["job": JobReceipt(
-            channel: job.channel, printer: printer.name, pages: job.document.numberOfPages, copies: job.copies
+            channel: job.channel, printer: printer.name, pages: job.pages, copies: job.copies
         )])
     }
 
     private func withCORS(_ response: Response, _ head: RequestHead) -> Response {
         var response = response
         response.headers.append(("Vary", "Origin"))
-        guard let origin = head.headers["origin"],
-              Self.builtInOrigins.contains(origin) || config.config.allowedOrigins.contains(origin)
-        else { return response }
+        guard let origin = head.headers["origin"], allows(origin) else { return response }
         response.headers += [
             ("Access-Control-Allow-Origin", origin),
             ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),

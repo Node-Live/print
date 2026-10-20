@@ -4,41 +4,26 @@ import Foundation
 import Testing
 @testable import NodePrintCore
 
-/// A page with a 2 pt frame along its edges and a 1 in square in its top-left corner.
-private func framedPDF(_ size: CGSize, pages: Int = 1) -> Data {
-    let data = NSMutableData()
-    var box = CGRect(origin: .zero, size: size)
-    let context = CGContext(consumer: CGDataConsumer(data: data)!, mediaBox: &box, nil)!
-    for _ in 0 ..< pages {
-        context.beginPDFPage(nil)
-        context.stroke(box.insetBy(dx: 1, dy: 1), width: 2)
-        context.fill(CGRect(x: 0, y: size.height - 72, width: 72, height: 72))
-        context.endPDFPage()
-    }
-    context.closePDF()
-    return data as Data
-}
-
-/// These go through the real print system with a driver queue, saving the job as a PDF instead of printing.
-@Suite(.enabled(if: !PrinterCatalog.printers().filter { $0.language == .driver }.isEmpty, "needs a driver print queue"))
+/// These go through PDFKit and the real print system on a CUPS queue, saving the job as a PDF instead of printing.
+@Suite(.enabled(if: !PrinterCatalog.printers().isEmpty, "needs a CUPS print queue"))
 struct DriverPrint {
-    let printer = PrinterCatalog.printers().first { $0.language == .driver }!
+    let printer = PrinterCatalog.printers().first!
     let directory = FileManager.default.temporaryDirectory.appending(path: "node-print-driver-\(UUID().uuidString)")
 
     init() throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
-    private struct Saved {
-        var sizes: [CGSize]
-        /// Where the ink of the first page sits, in points from the top-left corner of the sheet.
+    private struct SavedPage {
+        var size: CGSize
+        /// Where the ink sits, in points from the top-left corner of the sheet.
         var ink: CGRect
-        /// The darkest quarter of the first page: the corner the square ended up in.
-        var squareCorner: String
+        /// The darkest quarter of the sheet: the corner the square ended up in.
+        var square: Corner
     }
 
-    private func print(_ channel: Channel, _ pdf: Data) async throws -> Saved {
-        let job = try #require(PrintJob(channel: channel, pdf: pdf, copies: 1, title: channel.rawValue))
+    private func print(_ channel: Channel, _ body: Data, copies: Int = 1) async throws -> [SavedPage] {
+        let job = try #require(PrintJob(channel: channel, body: body, copies: copies, title: channel.rawValue))
         let system = SystemPrinting(saveDirectory: directory)
         let printer = printer
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
@@ -47,15 +32,19 @@ struct DriverPrint {
             }
         }
         let saved = try #require(CGPDFDocument(directory.appending(path: "\(channel.rawValue).pdf") as CFURL))
-        let sizes = (1 ... saved.numberOfPages).map { saved.page(at: $0)!.getBoxRect(.mediaBox).size }
-        let width = Int(sizes[0].width), height = Int(sizes[0].height)
+        return try (1 ... saved.numberOfPages).map { try inspect(#require(saved.page(at: $0))) }
+    }
+
+    private func inspect(_ page: CGPDFPage) throws -> SavedPage {
+        let size = page.getBoxRect(.mediaBox).size
+        let width = Int(size.width), height = Int(size.height)
         let context = try #require(CGContext(
             data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
             space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
         ))
         context.setFillColor(gray: 1, alpha: 1)
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-        context.drawPDFPage(try #require(saved.page(at: 1)))
+        context.drawPDFPage(page)
         let pixels = context.data!.assumingMemoryBound(to: UInt8.self)
         var minX = width, minY = height, maxX = -1, maxY = -1
         var quarters = [0, 0, 0, 0]
@@ -68,26 +57,26 @@ struct DriverPrint {
                 quarters[(y < height / 2 ? 0 : 2) + (x < width / 2 ? 0 : 1)] += 1
             }
         }
-        let corners = ["top-left", "top-right", "bottom-left", "bottom-right"]
-        return Saved(
-            sizes: sizes,
+        let corners: [Corner] = [.topLeft, .topRight, .bottomLeft, .bottomRight]
+        return SavedPage(
+            size: size,
             ink: CGRect(x: minX, y: minY, width: maxX + 1 - minX, height: maxY + 1 - minY),
-            squareCorner: corners[quarters.firstIndex(of: quarters.max()!)!]
+            square: corners[quarters.firstIndex(of: quarters.max()!)!]
         )
     }
 
-    /// The page fitted into the whole label or the printable area of the Letter sheet, centred, in top-left coordinates.
-    private func expectedInk(_ channel: Channel, turnedSize size: CGSize) async throws -> CGRect {
+    /// A page of `size` (as it stands on the sheet) fitted into the printable area of the channel's paper and
+    /// centred, in top-left coordinates.
+    private func expectedInk(_ channel: Channel, upright size: CGSize) async throws -> CGRect {
         let printer = printer
         let (paper, printable) = try await MainActor.run {
-            let info = try SystemPrinting().printInfo(for: printer, channel: channel, copies: 1)
+            let info = try SystemPrinting().printInfo(for: printer, channel: channel)
             return (info.paperSize, info.imageablePageBounds)
         }
-        let target = channel == .label ? CGRect(origin: .zero, size: paper) : printable
-        let scale = min(target.width / size.width, target.height / size.height)
+        let scale = min(printable.width / size.width, printable.height / size.height)
         let fitted = CGSize(width: size.width * scale, height: size.height * scale)
-        let x = target.minX + (target.width - fitted.width) / 2
-        let y = target.minY + (target.height - fitted.height) / 2
+        let x = printable.minX + (printable.width - fitted.width) / 2
+        let y = printable.minY + (printable.height - fitted.height) / 2
         return CGRect(x: x, y: paper.height - y - fitted.height, width: fitted.width, height: fitted.height)
     }
 
@@ -95,28 +84,78 @@ struct DriverPrint {
         abs(a.minX - b.minX) < 2 && abs(a.minY - b.minY) < 2 && abs(a.maxX - b.maxX) < 2 && abs(a.maxY - b.maxY) < 2
     }
 
-    @Test func printsLabelsOn4x6WithALandscapePageTurnedClockwise() async throws {
-        let saved = try await print(.label, framedPDF(CGSize(width: 432, height: 288), pages: 2))
-        #expect(saved.sizes.count == 2)
-        #expect(saved.sizes.allSatisfy { abs($0.width - 288) < 1 && abs($0.height - 432) < 1 })
-        let expected = try await expectedInk(.label, turnedSize: CGSize(width: 288, height: 432))
-        #expect(near(saved.ink, expected), "ink \(saved.ink), expected \(expected)")
-        #expect(saved.squareCorner == "top-right")
+    @Test func printsALabelOn4x6FittedToThePrintableArea() async throws {
+        let pages = try await print(.label, fixturePDF([.framed(CGSize(width: 288, height: 432))]))
+        let page = try #require(pages.first)
+        #expect(abs(page.size.width - 288) < 1 && abs(page.size.height - 432) < 1)
+        let expected = try await expectedInk(.label, upright: CGSize(width: 288, height: 432))
+        #expect(near(page.ink, expected), "ink \(page.ink), expected \(expected)")
+        #expect(page.square == .topLeft)
+    }
+
+    @Test func turnsALandscapeLabelClockwise() async throws {
+        let pages = try await print(.label, fixturePDF([.framed(CGSize(width: 432, height: 288))]))
+        let page = try #require(pages.first)
+        let expected = try await expectedInk(.label, upright: CGSize(width: 288, height: 432))
+        #expect(near(page.ink, expected), "ink \(page.ink), expected \(expected)")
+        #expect(page.square == .topRight)
+    }
+
+    @Test func repeatsEachLabelPageInARow() async throws {
+        let body = fixturePDF([.framed(CGSize(width: 288, height: 432)), .framed(CGSize(width: 288, height: 432), square: .bottomRight)])
+        let pages = try await print(.label, body, copies: 2)
+        #expect(pages.map(\.square) == [.topLeft, .topLeft, .bottomRight, .bottomRight])
+    }
+
+    @Test func repeatsTheWholeDocument() async throws {
+        let body = fixturePDF([.framed(CGSize(width: 612, height: 792)), .framed(CGSize(width: 612, height: 792), square: .bottomRight)])
+        let pages = try await print(.document, body, copies: 2)
+        #expect(pages.map(\.square) == [.topLeft, .bottomRight, .topLeft, .bottomRight])
     }
 
     @Test func printsADocumentOnLetterFittedAndCentredInThePrintableArea() async throws {
-        let saved = try await print(.document, framedPDF(CGSize(width: 288, height: 432)))
-        #expect(abs(saved.sizes[0].width - 612) < 1 && abs(saved.sizes[0].height - 792) < 1)
-        let expected = try await expectedInk(.document, turnedSize: CGSize(width: 288, height: 432))
-        #expect(near(saved.ink, expected), "ink \(saved.ink), expected \(expected)")
-        #expect(saved.squareCorner == "top-left")
+        let pages = try await print(.document, fixturePDF([.framed(CGSize(width: 288, height: 432))]))
+        let page = try #require(pages.first)
+        #expect(abs(page.size.width - 612) < 1 && abs(page.size.height - 792) < 1)
+        let expected = try await expectedInk(.document, upright: CGSize(width: 288, height: 432))
+        #expect(near(page.ink, expected), "ink \(page.ink), expected \(expected)")
+        #expect(page.square == .topLeft)
     }
 
     @Test func printsALandscapeDocumentPageLandscape() async throws {
-        let saved = try await print(.document, framedPDF(CGSize(width: 792, height: 612)))
-        #expect(abs(saved.sizes[0].width - 612) < 1 && abs(saved.sizes[0].height - 792) < 1)
-        let expected = try await expectedInk(.document, turnedSize: CGSize(width: 612, height: 792))
+        let pages = try await print(.document, fixturePDF([.framed(CGSize(width: 792, height: 612))]))
+        let page = try #require(pages.first)
+        let expected = try await expectedInk(.document, upright: CGSize(width: 612, height: 792))
+        #expect(near(page.ink, expected), "ink \(page.ink), expected \(expected)")
+        #expect(page.square == .bottomLeft)
+    }
+
+    @Test func printsOnlyWhatIsInsideTheCropBox() async throws {
+        let crop = CGRect(x: 100, y: 100, width: 288, height: 432)
+        let outside = "0 g 0 0 90 90 re f "
+        let page = FixturePage(media: CGRect(x: 0, y: 0, width: 612, height: 792), crop: crop, content: outside + FixturePage.frame(crop, square: .topLeft))
+        let saved = try #require(try await print(.label, fixturePDF([page])).first)
+        let expected = try await expectedInk(.label, upright: crop.size)
         #expect(near(saved.ink, expected), "ink \(saved.ink), expected \(expected)")
-        #expect(saved.squareCorner == "bottom-left")
+        #expect(saved.square == .topLeft)
+    }
+
+    @Test func turnsAPageByItsOwnRotateFirst() async throws {
+        // Landscape in its media box, but /Rotate 90 makes it stand portrait: no further turn on a label.
+        var page = FixturePage.framed(CGSize(width: 432, height: 288))
+        page.rotate = 90
+        let saved = try #require(try await print(.label, fixturePDF([page])).first)
+        let expected = try await expectedInk(.label, upright: CGSize(width: 288, height: 432))
+        #expect(near(saved.ink, expected), "ink \(saved.ink), expected \(expected)")
+        #expect(saved.square == .topRight)
+    }
+
+    @Test func printsAnImageAsOnePage() async throws {
+        let pages = try await print(.label, fixturePNG(width: 400, height: 600))
+        let page = try #require(pages.first)
+        #expect(pages.count == 1)
+        let expected = try await expectedInk(.label, upright: CGSize(width: 400, height: 600))
+        #expect(near(page.ink, expected), "ink \(page.ink), expected \(expected)")
+        #expect(page.square == .topLeft)
     }
 }

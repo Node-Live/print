@@ -23,11 +23,6 @@ public enum Paper: String, Codable, CaseIterable, Sendable {
     case a4 = "A4"
 }
 
-public enum PrinterLanguage: String, Codable, Sendable {
-    case zpl
-    case driver
-}
-
 public enum PrinterState: String, Codable, Sendable {
     case ready
     case busy
@@ -53,21 +48,19 @@ public struct Printer: Codable, Hashable, Identifiable, Sendable {
     public var connection: Connection
     public var kind: PrinterKind
     public var papers: [Paper]
-    public var language: PrinterLanguage
     public var dpi: Int
     public var state: PrinterState
     public var stateMessage: String
     public var isDefault: Bool
 
     enum CodingKeys: String, CodingKey {
-        case id, name, model, connection, kind, papers, language, dpi, state, stateMessage
+        case id, name, model, connection, kind, papers, dpi, state, stateMessage
         case isDefault = "default"
     }
 
     public init(
         id: String, name: String, model: String = "", connection: Connection = .other,
-        kind: PrinterKind = .other, papers: [Paper] = [], language: PrinterLanguage = .driver,
-        dpi: Int = 0, state: PrinterState = .ready, stateMessage: String = "", isDefault: Bool = false
+        kind: PrinterKind = .other, papers: [Paper] = [], dpi: Int = 0, state: PrinterState = .ready, stateMessage: String = "", isDefault: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -75,7 +68,6 @@ public struct Printer: Codable, Hashable, Identifiable, Sendable {
         self.connection = connection
         self.kind = kind
         self.papers = papers
-        self.language = language
         self.dpi = dpi
         self.state = state
         self.stateMessage = stateMessage

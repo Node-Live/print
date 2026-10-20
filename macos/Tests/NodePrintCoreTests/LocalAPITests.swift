@@ -1,5 +1,7 @@
+import AppKit
 import CoreGraphics
 import Foundation
+import os
 import Testing
 @testable import NodePrintCore
 
@@ -62,9 +64,11 @@ struct Harness {
             $0.channels = channels
             $0.allowedOrigins = origins
         }
-        let server = try LocalServer(api: LocalAPI(system: system, config: config), port: 0)
+        let server = LocalServer(api: LocalAPI(system: system, config: config), port: 0)
         let port = await withCheckedContinuation { continuation in
-            server.start(onReady: { continuation.resume(returning: $0) })
+            server.start { port in
+                if let port { continuation.resume(returning: port) }
+            }
         }
         return Harness(server: server, port: port, config: config)
     }
@@ -224,8 +228,8 @@ func samplePDF(pages: Int = 1, size: CGSize = CGSize(width: 288, height: 432)) -
         #expect(reply.errorCode == "BAD_COPIES")
     }
 
-    @Test(arguments: [Data("not a pdf".utf8), Data()])
-    func rejectsABodyThatIsNotAPDF(body: Data) async throws {
+    @Test(arguments: [Data("not a pdf".utf8), Data(), Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0])])
+    func rejectsABodyThatIsNotADocument(body: Data) async throws {
         let system = FakePrinting([rollo])
         let harness = try await Harness.start(system, channels: .init(label: rollo.id))
         let reply = try await harness.send("POST", "/print?channel=label", body: body)
@@ -234,27 +238,80 @@ func samplePDF(pages: Int = 1, size: CGSize = CGSize(width: 288, height: 432)) -
         #expect(system.jobs.isEmpty)
     }
 
-    @Test func rejectsABodyOverFiftyMegabytesWithoutReadingIt() async throws {
+    @Test func takesABodyOfExactlyTheLimit() async throws {
+        let config = ConfigStore(url: temporaryConfigURL(), firstRun: { [] })
+        let api = LocalAPI(system: FakePrinting([rollo]), config: config)
+        let head = RequestHead(method: "POST", target: "/print?channel=label", headers: [:])
+        #expect(api.response(to: head, contentLength: 52_428_800) == nil)
+        #expect(api.response(to: head, contentLength: 52_428_801)?.status == 413)
+    }
+
+    @Test func readsAChunkedBody() async throws {
+        let system = FakePrinting([rollo])
+        let harness = try await Harness.start(system, channels: .init(label: rollo.id))
+        let pdf = samplePDF()
+        let half = pdf.count / 2
+        var request = Data("POST /print?channel=label HTTP/1.1\r\nHost: 127.0.0.1\r\nTransfer-Encoding: chunked\r\n\r\n".utf8)
+        for part in [pdf.prefix(half), pdf.dropFirst(half)] {
+            request += Data("\(String(part.count, radix: 16))\r\n".utf8) + part + Data("\r\n".utf8)
+        }
+        request += Data("0\r\n\r\n".utf8)
+        let reply = try await harness.exchange(request)
+        #expect(reply.status == 200)
+        #expect(system.jobs.first?.job.pages == 1)
+    }
+
+    @Test func rejectsAChunkedBodyOnceItPassesTheLimit() async throws {
+        let harness = try await Harness.start(FakePrinting([rollo]), channels: .init(label: rollo.id))
+        let head = "POST /print?channel=label HTTP/1.1\r\nHost: 127.0.0.1\r\nTransfer-Encoding: chunked\r\n\r\n"
+        let reply = try await harness.exchange(Data((head + "\(String(52_428_801, radix: 16))\r\n").utf8))
+        #expect(reply.status == 413)
+        #expect(reply.errorCode == "TOO_LARGE")
+    }
+
+    @Test func rejectsABodyOverTheLimitWithoutReadingIt() async throws {
         let harness = try await Harness.start(FakePrinting([rollo]), channels: .init(label: rollo.id))
         let reply = try await harness.send("POST", "/print?channel=label", headers: ["Content-Length": "\(LocalAPI.maxBodyBytes + 1)"])
         #expect(reply.status == 413)
         #expect(reply.errorCode == "TOO_LARGE")
     }
 
-    @Test func rejectsAChannelWithNoPrinter() async throws {
+    @Test func rejectsAChannelWithNoPrinterBeforeLookingAtTheBody() async throws {
         let harness = try await Harness.start(FakePrinting([rollo]), channels: .init(label: rollo.id))
-        let reply = try await harness.send("POST", "/print?channel=document", body: samplePDF())
+        let reply = try await harness.send("POST", "/print?channel=document", body: Data("not a pdf".utf8))
         #expect(reply.status == 409)
         #expect(reply.errorCode == "NO_PRINTER")
     }
 
-    @Test(arguments: [PrinterState.offline, .paused])
-    func rejectsAPrinterThatCannotTakeJobs(state: PrinterState) async throws {
+    @Test func acceptsPNGAndJPEGAsOnePage() async throws {
+        let system = FakePrinting([rollo])
+        let harness = try await Harness.start(system, channels: .init(label: rollo.id))
+        let png = fixturePNG(width: 400, height: 600)
+        let image = try #require(NSBitmapImageRep(data: png))
+        let jpeg = try #require(image.representation(using: .jpeg, properties: [:]))
+        for (type, body) in [("image/png", png), ("image/jpeg", jpeg)] {
+            let reply = try await harness.send("POST", "/print?channel=label", headers: ["Content-Type": type], body: body)
+            #expect(reply.status == 200)
+            #expect((reply.json["job"] as? [String: Any])?["pages"] as? Int == 1)
+        }
+        #expect(system.jobs.map(\.job.pages) == [1, 1])
+    }
+
+    @Test func queuesAJobForABusyPrinter() async throws {
+        var printer = rollo
+        printer.state = .busy
+        let harness = try await Harness.start(FakePrinting([printer]), channels: .init(label: rollo.id))
+        let reply = try await harness.send("POST", "/print?channel=label", body: samplePDF())
+        #expect(reply.status == 200)
+    }
+
+    @Test(arguments: [PrinterState.offline, .paused, .error])
+    func rejectsAPrinterThatCannotTakeJobsBeforeLookingAtTheBody(state: PrinterState) async throws {
         var printer = rollo
         printer.state = state
         let system = FakePrinting([printer])
         let harness = try await Harness.start(system, channels: .init(label: rollo.id))
-        let reply = try await harness.send("POST", "/print?channel=label", body: samplePDF())
+        let reply = try await harness.send("POST", "/print?channel=label", body: Data("not a pdf".utf8))
         #expect(reply.status == 409)
         #expect(reply.errorCode == "PRINTER_UNAVAILABLE")
         #expect(system.jobs.isEmpty)
@@ -338,16 +395,45 @@ func samplePDF(pages: Int = 1, size: CGSize = CGSize(width: 288, height: 432)) -
     }
 
     @Test(arguments: ["https://evil.example", "https://nrp.node.live.evil.example", "http://nrp.node.live", "null"])
-    func givesOtherOriginsNoCORSHeaders(origin: String) async throws {
+    func refusesOtherOriginsWithoutCORSHeaders(origin: String) async throws {
         let harness = try await Harness.start(FakePrinting([]))
         let reply = try await harness.send("GET", "/status", headers: ["Origin": origin])
-        #expect(reply.status == 200)
+        #expect(reply.status == 403)
+        #expect(reply.errorCode == "FORBIDDEN_ORIGIN")
         #expect(reply.headers.keys.filter { $0.hasPrefix("access-control-") }.isEmpty)
     }
 
-    @Test func answersAPreflightWithNoContent() async throws {
+    @Test func doesNotPrintForAnotherOrigin() async throws {
+        let system = FakePrinting([rollo])
+        let harness = try await Harness.start(system, channels: .init(label: rollo.id))
+        let reply = try await harness.send("POST", "/print?channel=label", headers: ["Origin": "https://evil.example"], body: samplePDF())
+        #expect(reply.errorCode == "FORBIDDEN_ORIGIN")
+        #expect(system.jobs.isEmpty)
+    }
+
+    @Test func refusesAPreflightFromAnotherOrigin() async throws {
         let harness = try await Harness.start(FakePrinting([]))
-        let reply = try await harness.send("OPTIONS", "/print?channel=label", headers: [
+        let reply = try await harness.send("OPTIONS", "/print", headers: ["Origin": "https://evil.example"])
+        #expect(reply.status == 403)
+    }
+
+    @Test func checksTheOriginBeforeAnythingElse() async throws {
+        let harness = try await Harness.start(FakePrinting([]))
+        let reply = try await harness.send("POST", "/nowhere?channel=nope", headers: ["Origin": "https://evil.example"])
+        #expect(reply.errorCode == "FORBIDDEN_ORIGIN")
+    }
+
+    @Test func servesRequestsWithoutAnOrigin() async throws {
+        let harness = try await Harness.start(FakePrinting([]))
+        let reply = try await harness.send("GET", "/status")
+        #expect(reply.status == 200)
+        #expect(reply.headers["access-control-allow-origin"] == nil)
+    }
+
+    @Test(arguments: ["/print?channel=label", "/anywhere"])
+    func answersAPreflightOnAnyPathWithNoContent(target: String) async throws {
+        let harness = try await Harness.start(FakePrinting([]))
+        let reply = try await harness.send("OPTIONS", target, headers: [
             "Origin": "https://nrp.node.live",
             "Access-Control-Request-Method": "POST",
             "Access-Control-Request-Private-Network": "true",
@@ -364,4 +450,18 @@ func samplePDF(pages: Int = 1, size: CGSize = CGSize(width: 288, height: 432)) -
         #expect(reply.errorCode == "NO_PRINTER")
         #expect(reply.headers["access-control-allow-origin"] == "https://nrp.node.live")
     }
+}
+
+@Test func saysSoWhenThePortIsTaken() async throws {
+    let first = try await Harness.start(FakePrinting([]))
+    let config = ConfigStore(url: temporaryConfigURL(), firstRun: { [] })
+    let second = LocalServer(api: LocalAPI(system: FakePrinting([]), config: config), port: first.port)
+    let port = await withCheckedContinuation { continuation in
+        let once = OSAllocatedUnfairLock(initialState: false)
+        second.start { port in
+            if once.withLock({ done in defer { done = true }; return !done }) { continuation.resume(returning: port) }
+        }
+    }
+    second.stop()
+    #expect(port == nil)
 }

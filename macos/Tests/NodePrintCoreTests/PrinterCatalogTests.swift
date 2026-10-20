@@ -16,24 +16,17 @@ func connectionFollowsTheDeviceURI(uri: String, connection: Connection) {
     #expect(PrinterCatalog.connection(deviceURI: uri) == connection)
 }
 
-@Test func hidesQueuesThatDoNotPrintOnPaper() {
-    #expect(PrinterCatalog.isVirtual(deviceURI: "cups-pdf:/", printerType: 0))
-    #expect(PrinterCatalog.isVirtual(deviceURI: "file:///tmp/out.prn", printerType: 0))
-    #expect(PrinterCatalog.isVirtual(deviceURI: "ipp://fax.local/ipp/fax", printerType: 0x40000))
-    #expect(!PrinterCatalog.isVirtual(deviceURI: "usb://Brother/HL", printerType: 0x9004))
+@Test func hidesQueuesWithoutAPrintingBackend() {
+    let backends: Set = ["usb", "ipp", "dnssd", "socket"]
+    #expect(PrinterCatalog.isVirtual(deviceURI: "cups-pdf:/", printerType: 0, backends: backends))
+    #expect(PrinterCatalog.isVirtual(deviceURI: "pdfwriter:/", printerType: 0, backends: backends))
+    #expect(PrinterCatalog.isVirtual(deviceURI: "ipp://fax.local/ipp/fax", printerType: 0x40000, backends: backends))
+    #expect(!PrinterCatalog.isVirtual(deviceURI: "usb://Brother/HL", printerType: 0x9004, backends: backends))
+    #expect(!PrinterCatalog.isVirtual(deviceURI: "socket://127.0.0.1:9100", printerType: 0, backends: backends))
 }
 
-@Test(arguments: [
-    ("Zebra ZPL Label Printer", "", true),
-    ("ZDesigner GX420d ZPL", "", true),
-    ("Generic Label Printer", "MFG:Zebra Technologies;CMD:ZPL,EPL;MDL:GX420d;", true),
-    ("Zebra EPL2 Label Printer", "", false),
-    ("Zebra CPCL Label Printer", "", false),
-    ("Generic Label Printer", "MFG:Zebra;CMD:EPL;MDL:LP2844;", false),
-    ("Brother HL-L2350DW series", "MFG:Brother;CMD:PJL,PCL,PCLXL,URF;", false),
-])
-func recognisesZPLQueues(model: String, deviceID: String, zpl: Bool) {
-    #expect(PrinterCatalog.isZPL(makeAndModel: model, deviceID: deviceID) == zpl)
+@Test func knowsTheBackendsThisMacHas() {
+    #expect(PrinterCatalog.installedBackends.isSuperset(of: ["usb", "ipp", "dnssd", "socket", "lpd"]))
 }
 
 @Test func callsAQueueWhoseLargestPaperIsALabelThermal() {
@@ -53,8 +46,10 @@ func recognisesZPLQueues(model: String, deviceID: String, zpl: Bool) {
     (4, ["none"], true, .busy),
     (5, ["paused"], true, .paused),
     (3, ["none"], false, .paused),
+    (4, ["paused"], true, .paused),
     (3, ["offline-report"], true, .offline),
     (5, ["media-empty-error", "paused"], true, .error),
+    (5, ["media-empty-error", "offline-report", "paused"], true, .offline),
 ])
 func mapsTheCUPSState(state: Int, reasons: [String], accepting: Bool, expected: PrinterState) {
     #expect(PrinterCatalog.state(printerState: state, reasons: reasons, accepting: accepting) == expected)

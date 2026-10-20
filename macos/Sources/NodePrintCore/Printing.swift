@@ -1,29 +1,70 @@
 import AppKit
-import CUPS
+import ImageIO
+import PDFKit
+import UniformTypeIdentifiers
 
-public struct PrintJob: @unchecked Sendable {
+/// A print request whose body opened: the document as a PDF (an image body becomes a one-page PDF).
+public struct PrintJob: Sendable {
     public let channel: Channel
     public let pdf: Data
-    public let document: CGPDFDocument
+    /// Pages of the document as sent, before copies.
+    public let pages: Int
     public let copies: Int
     public let title: String
 
-    /// `nil` when `pdf` is not a PDF that opens, or has no pages.
-    public init?(channel: Channel, pdf: Data, copies: Int, title: String) {
-        guard let provider = CGDataProvider(data: pdf as CFData),
+    /// `nil` when `body` is not a PDF, PNG or JPEG that opens, or has no pages.
+    public init?(channel: Channel, body: Data, copies: Int, title: String) {
+        guard let pdf = Self.pdf(from: body),
+              let provider = CGDataProvider(data: pdf as CFData),
               let document = CGPDFDocument(provider),
               document.isUnlocked || document.unlockWithPassword(""),
               document.numberOfPages > 0
         else { return nil }
         self.channel = channel
         self.pdf = pdf
-        self.document = document
+        pages = document.numberOfPages
         self.copies = copies
         self.title = title
     }
 
-    public var pages: [CGPDFPage] {
-        (1 ... document.numberOfPages).compactMap { document.page(at: $0) }
+    private static func pdf(from body: Data) -> Data? {
+        let png: [UInt8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+        let jpeg: [UInt8] = [0xFF, 0xD8, 0xFF]
+        guard body.starts(with: png) || body.starts(with: jpeg) else { return body }
+        return imagePage(body)
+    }
+
+    /// One page the size of the image at its own resolution (72 dpi when it names none), turned upright by its
+    /// orientation tag.
+    private static func imagePage(_ data: Data) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                  kCGImageSourceCreateThumbnailFromImageAlways: true,
+                  kCGImageSourceCreateThumbnailWithTransform: true,
+                  kCGImageSourceThumbnailMaxPixelSize: max(width, height),
+              ] as CFDictionary)
+        else { return nil }
+        let dpiX = properties[kCGImagePropertyDPIWidth] as? Double ?? 72
+        let dpiY = properties[kCGImagePropertyDPIHeight] as? Double ?? 72
+        let turned = image.width != width
+        var box = CGRect(
+            x: 0, y: 0,
+            width: Double(image.width) * 72 / (turned ? dpiY : dpiX),
+            height: Double(image.height) * 72 / (turned ? dpiX : dpiY)
+        )
+        let pdf = NSMutableData()
+        guard let consumer = CGDataConsumer(data: pdf), let context = CGContext(consumer: consumer, mediaBox: &box, nil) else {
+            return nil
+        }
+        context.beginPDFPage(nil)
+        context.interpolationQuality = .high
+        context.draw(image, in: box)
+        context.endPDFPage()
+        context.closePDF()
+        return pdf as Data
     }
 }
 
@@ -37,13 +78,14 @@ public struct PrintFailure: Error, Sendable {
 
 public protocol PrintSystem: Sendable {
     func printers() -> [Printer]
-    /// Hands the job to the OS queue; runs on the channel's own serial queue.
+    /// Hands the job to the OS spooler; runs on the channel's own serial queue.
     func print(_ job: PrintJob, on printer: Printer) throws(PrintFailure)
 }
 
-/// Printing through CUPS: raw ZPL for ZPL label printers, an AppKit print job through the driver for everything else.
+/// Every job goes through the printer's driver: an AppKit print job with the channel's paper set on it, one sheet
+/// per page after copies are expanded, each PDFKit page placed by `SheetsView`.
 public struct SystemPrinting: PrintSystem {
-    /// When set, driver jobs are written to PDF files in this directory and ZPL jobs to `.zpl` files, instead of printing.
+    /// When set, jobs are written to PDF files in this directory instead of printing.
     public let saveDirectory: URL?
 
     public init(saveDirectory: URL? = nil) {
@@ -55,56 +97,25 @@ public struct SystemPrinting: PrintSystem {
     }
 
     public func print(_ job: PrintJob, on printer: Printer) throws(PrintFailure) {
-        if job.channel == .label, printer.language == .zpl {
-            let zpl = ZPL.job(pages: job.pages.map { PageLayout.labelBitmap($0, dpi: printer.dpi) }, copies: job.copies)
-            try sendRaw(Data(zpl.utf8), to: printer, title: job.title)
-        } else {
-            let result = DispatchQueue.main.sync {
-                MainActor.assumeIsolated { Result { () throws(PrintFailure) in try printWithDriver(job, on: printer) } }
-            }
-            try result.get()
+        let result = DispatchQueue.main.sync {
+            MainActor.assumeIsolated { Result { () throws(PrintFailure) in try printWithDriver(job, on: printer) } }
         }
-    }
-
-    private func sendRaw(_ data: Data, to printer: Printer, title: String) throws(PrintFailure) {
-        if let saveDirectory {
-            do {
-                try data.write(to: saveDirectory.appending(path: "\(title).zpl"))
-                return
-            } catch {
-                throw PrintFailure(error.localizedDescription)
-            }
-        }
-        let queue = printer.id
-        let job = cupsCreateJob(nil, queue, title, 0, nil)
-        guard job > 0 else { throw refused(printer) }
-        guard cupsStartDocument(nil, queue, job, title, CUPS_FORMAT_RAW, 1) == HTTP_STATUS_CONTINUE else {
-            let failure = refused(printer)
-            cupsCancelJob2(nil, queue, job, 0)
-            throw failure
-        }
-        let written = data.withUnsafeBytes { cupsWriteRequestData(nil, $0.baseAddress, $0.count) }
-        guard written == HTTP_STATUS_CONTINUE else {
-            let failure = refused(printer)
-            _ = cupsFinishDocument(nil, queue)
-            cupsCancelJob2(nil, queue, job, 0)
-            throw failure
-        }
-        guard cupsFinishDocument(nil, queue) == IPP_STATUS_OK else { throw refused(printer) }
-    }
-
-    private func refused(_ printer: Printer) -> PrintFailure {
-        PrintFailure("\(printer.name) refused the job: \(String(cString: cupsLastErrorString()))")
+        try result.get()
     }
 
     @MainActor
     private func printWithDriver(_ job: PrintJob, on printer: Printer) throws(PrintFailure) {
-        let info = try printInfo(for: printer, channel: job.channel, copies: job.copies)
-        info.orientation = .portrait
+        guard let source = PDFDocument(data: job.pdf), !source.isLocked || source.unlock(withPassword: "") else {
+            throw PrintFailure("The document cannot be opened.")
+        }
+        let info = try printInfo(for: printer, channel: job.channel)
         let paper = CGRect(origin: .zero, size: info.paperSize)
+        if job.channel == .label, abs(paper.width - 288) > 1.5 || abs(paper.height - 432) > 1.5 {
+            throw PrintFailure("\(printer.name) did not take 4 × 6 in paper (it chose \(Int(paper.width)) × \(Int(paper.height)) pt).")
+        }
+        // AppKit lays each page out inside the margins, so the margins are the printable area's and a page is the
+        // printable area.
         let printable = info.imageablePageBounds
-        // AppKit lays each page out inside the margins, so the margins are the printable area's and every page is
-        // drawn relative to its corner.
         info.leftMargin = printable.minX
         info.bottomMargin = printable.minY
         info.rightMargin = paper.maxX - printable.maxX
@@ -117,8 +128,11 @@ public struct SystemPrinting: PrintSystem {
             info.jobDisposition = .save
             info.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = saveDirectory.appending(path: "\(job.title).pdf")
         }
-        let target = (job.channel == .label ? paper : printable).offsetBy(dx: -printable.minX, dy: -printable.minY)
-        let view = SheetsView(pages: job.pages, channel: job.channel, sheet: paper.size, page: printable.size, target: target)
+        let pages = (0 ..< source.pageCount).compactMap { source.page(at: $0) }
+        let order = job.channel == .label
+            ? pages.flatMap { Array(repeating: $0, count: job.copies) }
+            : Array(Array(repeating: pages, count: job.copies).joined())
+        let view = SheetsView(pages: order, channel: job.channel, sheet: paper.size, printable: printable.size)
         let operation = NSPrintOperation(view: view, printInfo: info)
         operation.showsPrintPanel = false
         operation.showsProgressPanel = false
@@ -126,11 +140,11 @@ public struct SystemPrinting: PrintSystem {
         guard operation.run() else { throw PrintFailure("\(printer.name) did not take the job.") }
     }
 
-    /// A print info for `printer` with the channel's paper set on the job: 4 × 6 in for labels (the variant with the
-    /// smallest margins, so the page fits the whole label), Letter for documents (the variant with the largest
-    /// margins, so borderless modes are not picked).
+    /// A print info for `printer` with the channel's paper set on the job and one copy: 4 × 6 in for labels,
+    /// Letter for documents. Of the driver's matching papers the one with the largest margins is taken, so a
+    /// borderless variant is not picked; a printer without one gets a custom size.
     @MainActor
-    func printInfo(for printer: Printer, channel: Channel, copies: Int) throws(PrintFailure) -> NSPrintInfo {
+    func printInfo(for printer: Printer, channel: Channel) throws(PrintFailure) -> NSPrintInfo {
         guard let pmPrinter = PMPrinterCreateFromPrinterID(printer.id as CFString) else {
             throw PrintFailure("\(printer.name) is not installed.")
         }
@@ -159,11 +173,10 @@ public struct SystemPrinting: PrintSystem {
                 }
             }
         }
-        candidates.sort { $0.margins < $1.margins }
         var custom: PMPaper?
         defer { if let custom { PMRelease(UnsafeRawPointer(custom)) } }
         let paper: PMPaper
-        if let match = channel == .label ? candidates.first : candidates.last {
+        if let match = candidates.max(by: { $0.margins < $1.margins }) {
             paper = match.paper
         } else {
             var margins = PMPaperMargins()
@@ -181,28 +194,29 @@ public struct SystemPrinting: PrintSystem {
         PMSessionValidatePageFormat(session, format, nil)
         PMCopyPageFormat(format, OpaquePointer(info.pmPageFormat()))
         info.updateFromPMPageFormat()
+        info.orientation = .portrait
 
-        PMSetCopies(OpaquePointer(info.pmPrintSettings()), UInt32(copies), false)
+        PMSetCopies(OpaquePointer(info.pmPrintSettings()), 1, false)
         info.updateFromPMPrintSettings()
         return info
     }
 }
 
-/// One printable area per PDF page, stacked top to bottom, each page placed by `PageLayout`.
+/// One printable area per page, stacked top to bottom. A page is reduced to its crop box turned by its own
+/// rotation, then turned again so it stands the way it prints (a landscape label 90° clockwise, a document page
+/// whose orientation differs from the sheet's 90° counter-clockwise), fitted to the printable area and centred.
 private final class SheetsView: NSView {
-    private let pages: [CGPDFPage]
+    private let pages: [PDFPage]
     private let channel: Channel
     private let sheet: CGSize
-    private let page: CGSize
-    private let target: CGRect
+    private let printable: CGSize
 
-    init(pages: [CGPDFPage], channel: Channel, sheet: CGSize, page: CGSize, target: CGRect) {
+    init(pages: [PDFPage], channel: Channel, sheet: CGSize, printable: CGSize) {
         self.pages = pages
         self.channel = channel
         self.sheet = sheet
-        self.page = page
-        self.target = target
-        super.init(frame: NSRect(x: 0, y: 0, width: page.width, height: page.height * CGFloat(pages.count)))
+        self.printable = printable
+        super.init(frame: NSRect(x: 0, y: 0, width: printable.width, height: printable.height * CGFloat(pages.count)))
     }
 
     required init?(coder: NSCoder) {
@@ -215,18 +229,47 @@ private final class SheetsView: NSView {
     }
 
     override func rectForPage(_ number: Int) -> NSRect {
-        NSRect(x: 0, y: CGFloat(pages.count - number) * page.height, width: page.width, height: page.height)
+        NSRect(x: 0, y: CGFloat(pages.count - number) * printable.height, width: printable.width, height: printable.height)
     }
 
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext, let number = NSPrintOperation.current?.currentPage else { return }
-        let pdfPage = pages[number - 1]
-        let size = PageLayout.displaySize(of: pdfPage)
-        let turn = channel == .label ? PageLayout.labelTurn(for: size) : PageLayout.documentTurn(for: size, on: sheet)
-        let origin = rectForPage(number).origin
+        let page = pages[number - 1]
+        let crop = page.bounds(for: .cropBox)
+        let size = page.rotation % 180 == 0 ? crop.size : CGSize(width: crop.height, height: crop.width)
+        let landscape = size.width > size.height
+        let turn: Turn = switch channel {
+        case .label: landscape ? .clockwise : .none
+        case .document: landscape != (sheet.width > sheet.height) ? .counterclockwise : .none
+        }
         context.saveGState()
         context.clip(to: rectForPage(number))
-        PageLayout.draw(pdfPage, in: context, target: target.offsetBy(dx: origin.x, dy: origin.y), turn: turn)
+        context.concatenate(Self.placement(of: size, in: rectForPage(number), turn: turn))
+        context.clip(to: CGRect(origin: .zero, size: size))
+        page.draw(with: .cropBox, to: context)
         context.restoreGState()
+    }
+
+    enum Turn {
+        case none
+        case clockwise
+        case counterclockwise
+    }
+
+    /// Maps a page of `size` (origin at 0, 0) into `target`, turned, fitted and centred; y-up.
+    static func placement(of size: CGSize, in target: CGRect, turn: Turn) -> CGAffineTransform {
+        let turned = turn == .none ? size : CGSize(width: size.height, height: size.width)
+        let scale = min(target.width / turned.width, target.height / turned.height)
+        let rotation: CGAffineTransform = switch turn {
+        case .none: .identity
+        case .clockwise: CGAffineTransform(a: 0, b: -1, c: 1, d: 0, tx: 0, ty: size.width)
+        case .counterclockwise: CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: size.height, ty: 0)
+        }
+        return rotation
+            .concatenating(CGAffineTransform(scaleX: scale, y: scale))
+            .concatenating(CGAffineTransform(
+                translationX: target.minX + (target.width - turned.width * scale) / 2,
+                y: target.minY + (target.height - turned.height * scale) / 2
+            ))
     }
 }

@@ -2,31 +2,50 @@ import Foundation
 import Network
 import os
 
-/// HTTP/1.1 on 127.0.0.1 only, one request per connection.
-public final class LocalServer: Sendable {
+/// HTTP/1.1 on 127.0.0.1 only, one request per connection. When the port cannot be bound it says so and tries
+/// again every 5 s.
+public final class LocalServer: @unchecked Sendable {
     public static let defaultPort: UInt16 = 19233
 
-    private let listener: NWListener
     private let api: LocalAPI
+    private let port: UInt16
     private let queue = DispatchQueue(label: "live.node.print.server")
+    private var listener: NWListener?
+    private var stopped = false
 
-    public init(api: LocalAPI, port: UInt16 = LocalServer.defaultPort) throws {
-        let parameters = NWParameters.tcp
-        parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: NWEndpoint.Port(rawValue: port)!)
-        listener = try NWListener(using: parameters)
+    public init(api: LocalAPI, port: UInt16 = LocalServer.defaultPort) {
         self.api = api
+        self.port = port
     }
 
-    /// The bound port once listening; reports failure (such as the port being taken) through `onFailure`.
-    public func start(onReady: @escaping @Sendable (UInt16) -> Void = { _ in }, onFailure: @escaping @Sendable (NWError) -> Void = { _ in }) {
-        let listener = listener
-        listener.stateUpdateHandler = { state in
+    /// `onChange` gets the bound port while listening and `nil` while the port is unavailable.
+    public func start(onChange: @escaping @Sendable (UInt16?) -> Void = { _ in }) {
+        queue.async { self.listen(onChange) }
+    }
+
+    public func stop() {
+        queue.async {
+            self.stopped = true
+            self.listener?.cancel()
+        }
+    }
+
+    private func listen(_ onChange: @escaping @Sendable (UInt16?) -> Void) {
+        guard !stopped else { return }
+        let parameters = NWParameters.tcp
+        parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: NWEndpoint.Port(rawValue: port)!)
+        guard let listener = try? NWListener(using: parameters) else { return retry(onChange) }
+        self.listener = listener
+        listener.stateUpdateHandler = { [self] state in
             switch state {
-            case .ready: onReady(listener.port?.rawValue ?? 0)
-            case let .failed(error):
-                Logger.server.error("listener failed: \(error.localizedDescription, privacy: .public)")
-                onFailure(error)
-            default: break
+            case .ready:
+                onChange(listener.port?.rawValue)
+            case let .failed(error), let .waiting(error):
+                Logger.server.error("cannot listen on \(self.port): \(error.localizedDescription, privacy: .public)")
+                listener.cancel()
+                retry(onChange)
+            default:
+                break
             }
         }
         let api = api
@@ -37,8 +56,10 @@ public final class LocalServer: Sendable {
         listener.start(queue: queue)
     }
 
-    public func stop() {
-        listener.cancel()
+    private func retry(_ onChange: @escaping @Sendable (UInt16?) -> Void) {
+        listener = nil
+        onChange(nil)
+        queue.asyncAfter(deadline: .now() + 5) { self.listen(onChange) }
     }
 }
 
@@ -61,19 +82,21 @@ private final class HTTPConnection: @unchecked Sendable {
         readHead()
     }
 
-    private func readHead() {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [self] data, _, isComplete, error in
+    private func receive(_ handle: @escaping @Sendable (_ ended: Bool) -> Void) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 1024 * 1024) { [self] data, _, isComplete, error in
             if let data { buffer.append(data) }
-            if let end = buffer.range(of: Data("\r\n\r\n".utf8)) {
-                let head = buffer[..<end.lowerBound]
-                buffer.removeSubrange(..<end.upperBound)
-                handle(head: head)
-            } else if isComplete || error != nil || buffer.count > Self.maxHeadBytes {
-                connection.cancel()
-            } else {
-                readHead()
-            }
+            handle(isComplete || error != nil)
         }
+    }
+
+    private func readHead() {
+        if let end = buffer.range(of: Data("\r\n\r\n".utf8)) {
+            let head = buffer[..<end.lowerBound]
+            buffer.removeSubrange(..<end.upperBound)
+            return handle(head: head)
+        }
+        if buffer.count > Self.maxHeadBytes { return connection.cancel() }
+        receive { [self] ended in ended ? connection.cancel() : readHead() }
     }
 
     private func handle(head raw: Data) {
@@ -87,42 +110,69 @@ private final class HTTPConnection: @unchecked Sendable {
             headers[line[..<colon].lowercased()] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
         }
         let head = RequestHead(method: String(requestLine[0]), target: String(requestLine[1]), headers: headers)
-        let length = max(0, Int(headers["content-length"] ?? "") ?? 0)
+        let chunked = headers["transfer-encoding"]?.lowercased().contains("chunked") == true
+        let length = chunked ? nil : max(0, Int(headers["content-length"] ?? "") ?? 0)
 
         if let response = api.response(to: head, contentLength: length) {
-            send(response) { [self] in drain(length - buffer.count) }
-            return
+            return send(response) { [self] in drain(length.map { $0 - buffer.count }) }
         }
         if headers["expect"]?.lowercased() == "100-continue" {
             connection.send(content: Data("HTTP/1.1 100 Continue\r\n\r\n".utf8), completion: .idempotent)
         }
-        readBody(head, length: length)
+        if let length {
+            readBody(head, length: length)
+        } else {
+            readChunks(head, body: Data())
+        }
     }
 
     private func readBody(_ head: RequestHead, length: Int) {
-        if buffer.count >= length {
-            let body = Data(buffer.prefix(length))
-            let api = api
-            Task {
-                let response = await api.response(to: head, body: body)
-                self.queue.async { self.send(response) { self.connection.cancel() } }
-            }
-            return
+        guard buffer.count >= length else {
+            return receive { [self] ended in ended && buffer.count < length ? connection.cancel() : readBody(head, length: length) }
         }
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 1024 * 1024) { [self] data, _, isComplete, error in
-            if let data { buffer.append(data) }
-            if buffer.count < length, isComplete || error != nil { return connection.cancel() }
-            readBody(head, length: length)
+        respond(head, body: Data(buffer.prefix(length)))
+    }
+
+    /// `Transfer-Encoding: chunked`, counted against the limit as it arrives.
+    private func readChunks(_ head: RequestHead, body: Data) {
+        var body = body
+        while let lineEnd = buffer.range(of: Data("\r\n".utf8)) {
+            let sizeText = String(decoding: buffer[buffer.startIndex ..< lineEnd.lowerBound], as: UTF8.self)
+                .split(separator: ";").first ?? ""
+            guard let size = Int(sizeText.trimmingCharacters(in: .whitespaces), radix: 16), size >= 0 else {
+                return connection.cancel()
+            }
+            if size == 0 { return respond(head, body: body) }
+            if body.count + size > LocalAPI.maxBodyBytes {
+                return send(api.tooLarge(head)) { [self] in drain(nil) }
+            }
+            let dataEnd = lineEnd.upperBound + size
+            guard buffer.endIndex >= dataEnd + 2 else { break }
+            body.append(buffer[lineEnd.upperBound ..< dataEnd])
+            buffer.removeSubrange(buffer.startIndex ..< dataEnd + 2)
+        }
+        let sofar = body
+        receive { [self] ended in ended ? connection.cancel() : readChunks(head, body: sofar) }
+    }
+
+    private func respond(_ head: RequestHead, body: Data) {
+        let api = api
+        Task {
+            let response = await api.response(to: head, body: body)
+            self.queue.async { self.send(response) { self.connection.cancel() } }
         }
     }
 
-    /// Reads and drops what is left of a body the response did not need, so the client is not reset mid-upload.
-    private func drain(_ remaining: Int) {
-        guard remaining > 0 else { return connection.cancel() }
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 1024 * 1024) { [self] data, _, isComplete, error in
-            let left = remaining - (data?.count ?? 0)
-            if left <= 0 || isComplete || error != nil { return connection.cancel() }
-            drain(left)
+    /// Reads and drops what is left of a body the response did not need (all of it until the client closes when its
+    /// length is unknown), so the client is not reset mid-upload.
+    private func drain(_ remaining: Int?) {
+        if let remaining, remaining <= 0 { return connection.cancel() }
+        let before = buffer.count
+        receive { [self] ended in
+            let read = buffer.count - before
+            buffer.removeAll()
+            if ended { return connection.cancel() }
+            drain(remaining.map { $0 - read })
         }
     }
 
@@ -138,6 +188,7 @@ private final class HTTPConnection: @unchecked Sendable {
         case 200: "OK"
         case 204: "No Content"
         case 400: "Bad Request"
+        case 403: "Forbidden"
         case 404: "Not Found"
         case 405: "Method Not Allowed"
         case 409: "Conflict"

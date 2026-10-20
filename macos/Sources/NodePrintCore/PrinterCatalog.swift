@@ -41,8 +41,6 @@ public enum PrinterCatalog {
             }
         }
 
-        let model = options["printer-make-and-model"] ?? ""
-        let zpl = isZPL(makeAndModel: model, deviceID: deviceID(queue: id))
         let state = state(
             printerState: Int(options["printer-state"] ?? "") ?? 3,
             reasons: (options["printer-state-reasons"] ?? "").split(separator: ",").map(String.init),
@@ -52,12 +50,11 @@ public enum PrinterCatalog {
         return Printer(
             id: id,
             name: info.isEmpty ? id : info,
-            model: model,
+            model: options["printer-make-and-model"] ?? "",
             connection: connection(deviceURI: deviceURI),
-            kind: zpl || isLabelSize(largest: sizes) ? .thermal : .other,
+            kind: isLabelSize(largest: sizes) ? .thermal : .other,
             papers: papers(sizes),
-            language: zpl ? .zpl : .driver,
-            dpi: dpi == 0 && zpl ? 203 : dpi,
+            dpi: dpi,
             state: state,
             stateMessage: state == .error ? stateMessage(printerURI: options["printer-uri-supported"] ?? "") : "",
             isDefault: dest.is_default != 0
@@ -74,37 +71,19 @@ public enum PrinterCatalog {
         }
     }
 
-    /// Queues that write a file or send a fax instead of printing on paper.
-    static func isVirtual(deviceURI: String, printerType: Int) -> Bool {
+    /// Queues that do not reach a device: fax queues, and queues whose device URI names no installed CUPS backend
+    /// (PDF writers and similar), decided by the backend, never by the queue's name.
+    static func isVirtual(deviceURI: String, printerType: Int, backends: Set<String> = installedBackends) -> Bool {
         let scheme = deviceURI.prefix { $0 != ":" }.lowercased()
-        return printerType & Int(CUPS_PRINTER_FAX.rawValue) != 0
-            || ["file", "cups-pdf", "pdfwriter", "fax"].contains(scheme)
+        return printerType & Int(CUPS_PRINTER_FAX.rawValue) != 0 || !backends.contains(scheme)
     }
 
-    static func isZPL(makeAndModel: String, deviceID: String) -> Bool {
-        let model = makeAndModel.uppercased()
-        let commands = deviceID.split(separator: ";").compactMap { field -> String? in
-            let parts = field.split(separator: ":", maxSplits: 1)
-            guard parts.count == 2 else { return nil }
-            let key = parts[0].trimmingCharacters(in: .whitespaces).uppercased()
-            return key == "CMD" || key == "COMMAND SET" ? parts[1].uppercased() : nil
-        }
-        if commands.contains(where: { $0.contains("ZPL") }) || model.contains("ZPL") { return true }
-        return model.contains("ZEBRA") && !model.contains("EPL") && !model.contains("CPCL")
-    }
+    static let installedBackends = Set((try? FileManager.default.contentsOfDirectory(atPath: "/usr/libexec/cups/backend")) ?? [])
 
-    /// CUPS keeps the IEEE 1284 device id of a queue in its PPD, if anywhere.
-    private static func deviceID(queue: String) -> String {
-        guard let ppd = try? String(contentsOfFile: "/etc/cups/ppd/\(queue).ppd", encoding: .utf8) else { return "" }
-        for line in ppd.split(separator: "\n") where line.hasPrefix("*1284DeviceID:") {
-            return line.dropFirst("*1284DeviceID:".count).trimmingCharacters(in: CharacterSet(charactersIn: " \t\"\r"))
-        }
-        return ""
-    }
-
+    /// The first of offline, error, paused, busy that CUPS reports; ready otherwise.
     static func state(printerState: Int, reasons: [String], accepting: Bool) -> PrinterState {
-        if reasons.contains(where: { $0.hasSuffix("-error") }) { return .error }
         if reasons.contains("offline-report") || reasons.contains("offline") { return .offline }
+        if reasons.contains(where: { $0.hasSuffix("-error") }) { return .error }
         if reasons.contains("paused") || printerState == 5 || !accepting { return .paused }
         return printerState == 4 ? .busy : .ready
     }

@@ -9,7 +9,7 @@ func temporaryConfigURL() -> URL {
 }
 
 let rollo = Printer(id: "Rollo_X1038", name: "Rollo X1038", connection: .usb, kind: .thermal, papers: [.fourBySix])
-let zebra = Printer(id: "Zebra_GX420d", name: "Zebra GX420d", kind: .thermal, language: .zpl, dpi: 203)
+let zebra = Printer(id: "Zebra_GX420d", name: "Zebra GX420d", kind: .thermal, papers: [.fourBySix], dpi: 203)
 let brother = Printer(id: "Brother_HL", name: "Brother HL-L2350DW", connection: .network, papers: [.letter, .a4], isDefault: true)
 
 @Test func firstRunPicksTheFirstThermalAndTheDefaultPrinter() throws {

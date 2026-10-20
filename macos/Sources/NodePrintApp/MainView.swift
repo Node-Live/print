@@ -51,12 +51,12 @@ struct TitleCapsule: View {
     }
 }
 
-/// Liquid Glass on macOS 26; a material capsule before it.
+/// Liquid Glass on macOS 26 (the clear variant, so it reads white over the white window); a material capsule before it.
 struct CapsuleSurface: ViewModifier {
     func body(content: Content) -> some View {
         #if compiler(>=6.2)
         if #available(macOS 26, *) {
-            content.glassEffect(.regular, in: .capsule)
+            content.glassEffect(.clear, in: .capsule)
         } else {
             materialCapsule(content)
         }
@@ -187,6 +187,7 @@ struct PrinterTile: View {
                 Image(systemName: channel == .label ? "tag" : "doc.text")
                     .font(.system(size: channel == .label ? 13 : 14, weight: .medium))
                     .foregroundStyle(Theme.ink)
+                    .scaleEffect(x: channel == .label ? -1 : 1)
             }
             .overlay(alignment: .bottomTrailing) {
                 Circle()

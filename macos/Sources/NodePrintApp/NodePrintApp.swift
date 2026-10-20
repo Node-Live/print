@@ -109,6 +109,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         model?.watch(false)
     }
 
+    /// AppKit grows the window when it lays out the toolbar on some systems; the window has one size.
+    func windowDidResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow, window.frame.size != Theme.windowSize else { return }
+        var frame = window.frame
+        frame.origin.y += frame.height - Theme.windowSize.height
+        frame.size = Theme.windowSize
+        window.setFrame(frame, display: true)
+        alignCapsule(in: window)
+    }
+
+    private func alignCapsule(in window: NSWindow) {
+        guard let close = window.standardWindowButton(.closeButton) else { return }
+        window.layoutIfNeeded()
+        model?.titlebarMidY = window.frame.height - close.convert(close.bounds, to: nil).midY
+    }
+
     private func makeWindow(_ model: AppModel) -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: Theme.windowSize),
@@ -133,11 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.setFrame(NSRect(origin: .zero, size: Theme.windowSize), display: false)
         window.delegate = self
         window.center()
-        if let close = window.standardWindowButton(.closeButton) {
-            window.layoutIfNeeded()
-            let frame = close.convert(close.bounds, to: nil)
-            model.titlebarMidY = window.frame.height - frame.midY
-        }
+        alignCapsule(in: window)
         return window
     }
 }

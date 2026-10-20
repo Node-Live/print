@@ -29,4 +29,12 @@ for language in en zh-Hans es; do
   kill "$pid"
   wait "$pid" || true
 done
+
+# The runner's display is 1x; a 2x render of the window content shows the type in detail (without the glass).
+rm -rf "$HOME/Library/Application Support/NODE Print"
+NODE_PRINT_SNAPSHOT="$out/main-window-en-content@2x.png" "$binary" -AppleLanguages "(en)" &
+pid=$!
+sleep 5
+kill "$pid"
+wait "$pid" || true
 ls -la "$out"

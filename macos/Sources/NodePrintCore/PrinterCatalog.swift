@@ -21,7 +21,10 @@ public enum PrinterCatalog {
             .reduce(into: [String: String]()) { $0[String(cString: $1.name)] = String(cString: $1.value) }
         let deviceURI = options["device-uri"] ?? ""
         let printerType = Int(options["printer-type"] ?? "") ?? 0
-        if isVirtual(deviceURI: deviceURI, printerType: printerType) { return nil }
+        let displayName = options["printer-info"] ?? ""
+        if isVirtual(deviceURI: deviceURI, printerType: printerType) || hasVirtualName(id) || hasVirtualName(displayName) {
+            return nil
+        }
 
         var sizes: [(width: Int, length: Int)] = []
         var dpi = 0
@@ -46,10 +49,9 @@ public enum PrinterCatalog {
             reasons: (options["printer-state-reasons"] ?? "").split(separator: ",").map(String.init),
             accepting: options["printer-is-accepting-jobs"] != "false"
         )
-        let info = options["printer-info"] ?? ""
         return Printer(
             id: id,
-            name: info.isEmpty ? id : info,
+            name: displayName.isEmpty ? id : displayName,
             model: options["printer-make-and-model"] ?? "",
             connection: connection(deviceURI: deviceURI),
             kind: isLabelPrinter(sizes) ? .thermal : .other,
@@ -76,6 +78,11 @@ public enum PrinterCatalog {
     static func isVirtual(deviceURI: String, printerType: Int, backends: Set<String> = installedBackends) -> Bool {
         let scheme = deviceURI.prefix { $0 != ":" }.lowercased()
         return printerType & Int(CUPS_PRINTER_FAX.rawValue) != 0 || !backends.contains(scheme)
+    }
+
+    /// "Print to PDF" style drivers that sit on an ordinary backend still give themselves away by name.
+    static func hasVirtualName(_ name: String) -> Bool {
+        ["pdf", "xps", "fax", "onenote"].contains { name.localizedCaseInsensitiveContains($0) }
     }
 
     static let installedBackends = Set((try? FileManager.default.contentsOfDirectory(atPath: "/usr/libexec/cups/backend")) ?? [])

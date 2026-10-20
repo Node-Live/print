@@ -25,6 +25,14 @@ func connectionFollowsTheDeviceURI(uri: String, connection: Connection) {
     #expect(!PrinterCatalog.isVirtual(deviceURI: "socket://127.0.0.1:9100", printerType: 0, backends: backends))
 }
 
+@Test(arguments: [
+    ("Adobe PDF", true), ("CUPS_PDF", true), ("Microsoft XPS Document Writer", true), ("Fax Brother", true),
+    ("Send To OneNote", true), ("Rollo X1038", false), ("Brother_HL_L2350DW", false), ("Zebra GX420d", false),
+])
+func hidesQueuesNamedLikeVirtualPrinters(name: String, hidden: Bool) {
+    #expect(PrinterCatalog.hasVirtualName(name) == hidden)
+}
+
 @Test func knowsTheBackendsThisMacHas() {
     #expect(PrinterCatalog.installedBackends.isSuperset(of: ["usb", "ipp", "dnssd", "socket", "lpd"]))
 }

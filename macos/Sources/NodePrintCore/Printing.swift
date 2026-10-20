@@ -1,3 +1,4 @@
+import Accelerate
 import AppKit
 import ImageIO
 import PDFKit
@@ -133,7 +134,9 @@ public struct SystemPrinting: PrintSystem {
         let order = job.channel == .label
             ? pages.flatMap { Array(repeating: $0, count: job.copies) }
             : Array(Array(repeating: pages, count: job.copies).joined())
-        let view = SheetsView(pages: order, channel: job.channel, sheet: paper.size, printable: printable.size)
+        let view = SheetsView(
+            pages: order, channel: job.channel, sheet: paper.size, printable: printable.size, dpi: printer.dpi > 0 ? printer.dpi : 203
+        )
         let operation = NSPrintOperation(view: view, printInfo: info)
         operation.showsPrintPanel = false
         operation.showsProgressPanel = false
@@ -206,17 +209,21 @@ public struct SystemPrinting: PrintSystem {
 /// One printable area per page, stacked top to bottom. A page is reduced to its crop box turned by its own
 /// rotation, then turned again so it stands the way it prints (a landscape label 90° clockwise, a document page
 /// whose orientation differs from the sheet's 90° counter-clockwise), fitted to the printable area and centred.
-private final class SheetsView: NSView {
+/// Labels go to the driver as black-and-white dots at the printer's resolution, one image pixel per dot.
+final class SheetsView: NSView {
     private let pages: [PDFPage]
     private let channel: Channel
     private let sheet: CGSize
     private let printable: CGSize
+    private let dpi: Int
+    private var dots: [ObjectIdentifier: CGImage] = [:]
 
-    init(pages: [PDFPage], channel: Channel, sheet: CGSize, printable: CGSize) {
+    init(pages: [PDFPage], channel: Channel, sheet: CGSize, printable: CGSize, dpi: Int) {
         self.pages = pages
         self.channel = channel
         self.sheet = sheet
         self.printable = printable
+        self.dpi = dpi
         super.init(frame: NSRect(x: 0, y: 0, width: printable.width, height: printable.height * CGFloat(pages.count)))
     }
 
@@ -236,19 +243,62 @@ private final class SheetsView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext, let number = NSPrintOperation.current?.currentPage else { return }
         let page = pages[number - 1]
-        let crop = page.bounds(for: .cropBox)
-        let size = page.rotation % 180 == 0 ? crop.size : CGSize(width: crop.height, height: crop.width)
-        let landscape = size.width > size.height
-        let turn: Turn = switch channel {
-        case .label: landscape ? .clockwise : .none
-        case .document: landscape != (sheet.width > sheet.height) ? .counterclockwise : .none
-        }
         context.saveGState()
         context.clip(to: rectForPage(number))
-        context.concatenate(Self.placement(of: size, in: rectForPage(number), turn: turn))
-        context.clip(to: CGRect(origin: .zero, size: size))
-        page.draw(with: .cropBox, to: context)
+        if channel == .label {
+            let key = ObjectIdentifier(page)
+            let image = dots[key] ?? Self.labelDots(page, printable: printable, dpi: dpi)
+            dots[key] = image
+            context.interpolationQuality = .none
+            context.draw(image, in: rectForPage(number))
+        } else {
+            let size = Self.visibleSize(of: page)
+            let turn: Turn = (size.width > size.height) != (sheet.width > sheet.height) ? .counterclockwise : .none
+            context.concatenate(Self.placement(of: size, in: rectForPage(number), turn: turn))
+            context.clip(to: CGRect(origin: .zero, size: size))
+            page.draw(with: .cropBox, to: context)
+        }
         context.restoreGState()
+    }
+
+    /// The label page drawn in grey at `dpi` into the printable area (a landscape page turned clockwise, images
+    /// sampled without interpolation), then cut to black below 128 and white from 128 up, with no dithering: a 1-bit
+    /// image of exactly the printable area's dots, which the driver has no reason to scale or halftone.
+    static func labelDots(_ page: PDFPage, printable: CGSize, dpi: Int) -> CGImage {
+        let width = Int((printable.width * CGFloat(dpi) / 72).rounded())
+        let height = Int((printable.height * CGFloat(dpi) / 72).rounded())
+        var grey = [UInt8](repeating: 0, count: width * height)
+        let bytesPerRow = (width + 7) / 8
+        var bits = [UInt8](repeating: 0, count: bytesPerRow * height)
+        grey.withUnsafeMutableBytes { greyBytes in
+            let context = CGContext(
+                data: greyBytes.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
+                space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
+            )!
+            context.setFillColor(gray: 1, alpha: 1)
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+            context.interpolationQuality = .none
+            let size = visibleSize(of: page)
+            let turn: Turn = size.width > size.height ? .clockwise : .none
+            context.concatenate(placement(of: size, in: CGRect(x: 0, y: 0, width: width, height: height), turn: turn))
+            context.clip(to: CGRect(origin: .zero, size: size))
+            page.draw(with: .cropBox, to: context)
+            bits.withUnsafeMutableBytes { bitBytes in
+                var source = vImage_Buffer(data: greyBytes.baseAddress, height: vImagePixelCount(height), width: vImagePixelCount(width), rowBytes: width)
+                var target = vImage_Buffer(data: bitBytes.baseAddress, height: vImagePixelCount(height), width: vImagePixelCount(width), rowBytes: bytesPerRow)
+                _ = vImageConvert_Planar8toPlanar1(&source, &target, nil, Int32(kvImageConvert_DitherNone), vImage_Flags(kvImageNoFlags))
+            }
+        }
+        return CGImage(
+            width: width, height: height, bitsPerComponent: 1, bitsPerPixel: 1, bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
+            provider: CGDataProvider(data: Data(bits) as CFData)!, decode: nil, shouldInterpolate: false, intent: .defaultIntent
+        )!
+    }
+
+    private static func visibleSize(of page: PDFPage) -> CGSize {
+        let crop = page.bounds(for: .cropBox)
+        return page.rotation % 180 == 0 ? crop.size : CGSize(width: crop.height, height: crop.width)
     }
 
     enum Turn {

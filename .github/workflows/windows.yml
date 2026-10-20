@@ -49,7 +49,7 @@ jobs:
         run: |
           dotnet tool install -g vpk --version 1.2.161
           # Signing goes here once Azure Trusted Signing is set up: vpk pack ... --azureTrustedSignFile <metadata.json>
-          vpk pack --packId NodePrint --packVersion $env:VERSION --packDir dist/app --mainExe NodePrint.exe `
+          vpk pack --packId NodePrint --packVersion $env:VERSION --runtime win-x64 --packDir dist/app --mainExe NodePrint.exe `
             --packTitle "NODE Print" --packAuthors NODE --icon windows/NodePrint.App/Assets/NodePrint.ico `
             --outputDir dist/releases
           Get-ChildItem dist/releases | Format-Table Name, Length -AutoSize

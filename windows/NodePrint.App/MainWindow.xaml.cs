@@ -89,10 +89,18 @@ public sealed partial class MainWindow : Window
 
     private async void Refresh()
     {
-        var (label, document) = await Task.Run(() =>
-            (service.ChannelStatus(Channel.Label), service.ChannelStatus(Channel.Document)));
-        LabelSection.Show(label);
-        DocumentSection.Show(document);
+        try
+        {
+            var (label, document) = await Task.Run(() =>
+                (service.ChannelStatus(Channel.Label), service.ChannelStatus(Channel.Document)));
+            LabelSection.Show(label);
+            DocumentSection.Show(document);
+        }
+        catch (Exception e)
+        {
+            // The spooler can fail a query now and then; the next tick tries again.
+            ErrorLog.Write(e);
+        }
     }
 
     private void PlaceOnScreen()

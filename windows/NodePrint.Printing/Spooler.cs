@@ -16,8 +16,6 @@ internal sealed record Capabilities(IReadOnlyList<(int Width, int Length)> Paper
 
 internal static unsafe class Spooler
 {
-    private const int ErrorInsufficientBuffer = 122;
-
     public static IReadOnlyList<Queue> Queues()
     {
         var queues = new List<Queue>();
@@ -92,10 +90,11 @@ internal static unsafe class Spooler
             [.. resolutions.Select(r => r.X)]);
     }
 
+    /// <summary>The error for a failed call; several winspool and GDI calls set no last error, so there may be no text.</summary>
     public static Exception Failure(string call)
     {
         int code = Marshal.GetLastPInvokeError();
-        return new IOException($"{call}: {new Win32Exception(code).Message}");
+        return new IOException(code == 0 ? $"{call} failed." : $"{call}: {new Win32Exception(code).Message}");
     }
 
     private static T[] Read<T>(string name, string port, PRINTER_DEVICE_CAPABILITIES capability) where T : unmanaged
@@ -122,13 +121,14 @@ internal static unsafe class Spooler
 
     private delegate BOOL Call(byte* buffer, uint size, uint* needed, uint* returned);
 
-    /// <summary>The two-call winspool pattern: ask for the size, then fill a buffer read while it is pinned.</summary>
+    /// <summary>The two-call winspool pattern: ask for the size, then fill a buffer read while it is pinned. The size is
+    /// asked again when the list grew in between.</summary>
     private static void Fill(Call call, Action<nint, int> read)
     {
         uint needed = 0, returned = 0;
+        byte[] buffer = new byte[1];
         for (int attempt = 0; attempt < 3; attempt++)
         {
-            byte[] buffer = new byte[Math.Max(needed, 1)];
             fixed (byte* pointer = buffer)
             {
                 if (call(pointer, (uint)buffer.Length, &needed, &returned))
@@ -137,7 +137,8 @@ internal static unsafe class Spooler
                     return;
                 }
             }
-            if (Marshal.GetLastPInvokeError() != ErrorInsufficientBuffer) break;
+            if (needed <= buffer.Length) break;
+            buffer = new byte[needed];
         }
         throw Failure("winspool");
     }

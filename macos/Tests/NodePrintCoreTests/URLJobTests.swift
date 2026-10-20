@@ -16,6 +16,7 @@ final class FileServer: @unchecked Sendable {
     private let queue = DispatchQueue(label: "file-server")
     private let answers: [String: Answer]
     private(set) var port: UInt16 = 0
+    private(set) var requests = 0
 
     init(_ answers: [String: Answer]) async throws {
         self.answers = answers
@@ -43,6 +44,7 @@ final class FileServer: @unchecked Sendable {
     private func serve(_ connection: NWConnection) {
         connection.start(queue: queue)
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [self] data, _, _, _ in
+            requests += 1
             let request = String(decoding: data ?? Data(), as: UTF8.self)
             let path = request.split(separator: " ").dropFirst().first.map(String.init) ?? "/"
             let answer = answers[path] ?? Answer(status: 404)
@@ -97,10 +99,18 @@ private func urlJob(_ url: String) -> Data {
         #expect(system.jobs.isEmpty)
     }
 
-    @Test func checksThePrinterBeforeTheURL() async throws {
+    @Test func checksTheURLBeforeThePrinter() async throws {
         let harness = try await Harness.start(FakePrinting([rollo]))
         let reply = try await harness.send("POST", "/print?channel=label", headers: ["Content-Type": "application/json"], body: Data("{}".utf8))
+        #expect(reply.errorCode == "BAD_URL")
+    }
+
+    @Test func downloadsNothingWithoutAPrinter() async throws {
+        let files = try await FileServer(["/label.pdf": .init(body: samplePDF())])
+        let harness = try await Harness.start(FakePrinting([rollo]))
+        let reply = try await harness.send("POST", "/print?channel=label", headers: ["Content-Type": "application/json"], body: urlJob(files.url("/label.pdf")))
         #expect(reply.errorCode == "NO_PRINTER")
+        #expect(files.requests == 0)
     }
 
     @Test(arguments: ["/missing", "/huge"])
@@ -114,6 +124,7 @@ private func urlJob(_ url: String) -> Data {
         let reply = try await harness.send("POST", "/print?channel=label", headers: ["Content-Type": "application/json"], body: urlJob(files.url(path)))
         #expect(reply.status == 502)
         #expect(reply.errorCode == "FETCH_FAILED")
+        #expect(((reply.json["error"] as? [String: Any])?["message"] as? String)?.hasPrefix(files.url(path) + " could not be downloaded: ") == true)
         #expect(system.jobs.isEmpty)
     }
 

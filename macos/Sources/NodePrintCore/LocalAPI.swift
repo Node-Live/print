@@ -101,9 +101,15 @@ public final class LocalAPI: Sendable {
         let chosen = config.config.channels[channel]
         let title = head.query["title"].flatMap { $0.isEmpty ? nil : $0 } ?? (channel == .label ? "NODE label" : "NODE document")
         let copies = copies(head)!
-        let named = head.headers["content-type"]?.lowercased().hasPrefix("application/json") == true
-        queues[channel]!.async {
-            let response = self.print(channel, on: chosen, body: body, named: named, copies: copies, title: title)
+        var source: URL?
+        if head.headers["content-type"]?.lowercased().hasPrefix("application/json") == true {
+            guard let url = Self.documentURL(in: body) else {
+                return completion(withCORS(.error(400, "BAD_URL", "The JSON body needs a url that starts with http:// or https://."), head))
+            }
+            source = url
+        }
+        queues[channel]!.async { [source] in
+            let response = self.print(channel, on: chosen, body: body, source: source, copies: copies, title: title)
             completion(self.withCORS(response, head))
         }
     }
@@ -160,9 +166,9 @@ public final class LocalAPI: Sendable {
         ))
     }
 
-    /// Runs on the channel's queue, in arrival order, on the printer that was chosen when the body came in. A `named`
-    /// body is JSON naming the document's URL, downloaded here so it keeps its place in the queue.
-    private func print(_ channel: Channel, on id: String?, body: Data, named: Bool, copies: Int, title: String) -> Response {
+    /// Runs on the channel's queue, in arrival order, on the printer that was chosen when the body came in. A job
+    /// that names its document by `source` downloads it here, so it keeps its place in the queue.
+    private func print(_ channel: Channel, on id: String?, body: Data, source: URL?, copies: Int, title: String) -> Response {
         guard let id else {
             return .error(409, "NO_PRINTER", "No \(channel.rawValue) printer is chosen in NODE Print.")
         }
@@ -173,14 +179,11 @@ public final class LocalAPI: Sendable {
             return .error(409, "PRINTER_UNAVAILABLE", "\(printer.name) is \(printer.state == .error ? "in error" : printer.state.rawValue).")
         }
         var document = body
-        if named {
-            guard let url = Self.documentURL(in: body) else {
-                return .error(400, "BAD_URL", "The JSON body needs a url that starts with http:// or https://.")
-            }
+        if let source {
             do {
-                document = try Download.fetch(url)
+                document = try Download.fetch(source)
             } catch {
-                return .error(502, "FETCH_FAILED", "Downloading \(error.message)")
+                return .error(502, "FETCH_FAILED", error.message)
             }
         }
         guard let job = PrintJob(channel: channel, body: document, copies: copies, title: title) else {

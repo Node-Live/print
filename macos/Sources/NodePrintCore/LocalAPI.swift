@@ -1,0 +1,201 @@
+import Foundation
+
+public struct RequestHead: Sendable {
+    public var method: String
+    public var path: String
+    public var query: [String: String]
+    /// Header names are lower-cased.
+    public var headers: [String: String]
+
+    public init(method: String, target: String, headers: [String: String]) {
+        self.method = method
+        self.headers = headers
+        let parts = target.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
+        path = String(parts[0])
+        var query: [String: String] = [:]
+        if parts.count == 2 {
+            for item in parts[1].split(separator: "&") {
+                let pair = item.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+                let key = Self.formDecoded(pair[0])
+                if query[key] == nil {
+                    query[key] = pair.count == 2 ? Self.formDecoded(pair[1]) : ""
+                }
+            }
+        }
+        self.query = query
+    }
+
+    /// `application/x-www-form-urlencoded` decoding, as `URLSearchParams` writes it.
+    private static func formDecoded(_ text: Substring) -> String {
+        let spaced = text.replacingOccurrences(of: "+", with: " ")
+        return spaced.removingPercentEncoding ?? spaced
+    }
+}
+
+public struct Response: Sendable {
+    public var status: Int
+    public var headers: [(String, String)]
+    public var body: Data
+
+    init(status: Int, json: some Encodable) {
+        self.status = status
+        headers = [("Content-Type", "application/json; charset=utf-8")]
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.withoutEscapingSlashes]
+        body = (try? encoder.encode(json)) ?? Data()
+    }
+
+    init(status: Int) {
+        self.status = status
+        headers = []
+        body = Data()
+    }
+
+    static func error(_ status: Int, _ code: String, _ message: String) -> Response {
+        Response(status: status, json: ["error": ["code": code, "message": message]])
+    }
+}
+
+/// The local HTTP contract of `docs/protocol.md`, independent of the socket that carries it.
+public final class LocalAPI: Sendable {
+    public static let maxBodyBytes = 50 * 1024 * 1024
+    static let builtInOrigins = ["https://nrp.node.live", "http://localhost:5173", "http://127.0.0.1:5173"]
+
+    private let system: any PrintSystem
+    private let config: ConfigStore
+    private let queues: [Channel: DispatchQueue]
+
+    public init(system: any PrintSystem, config: ConfigStore) {
+        self.system = system
+        self.config = config
+        queues = Dictionary(uniqueKeysWithValues: Channel.allCases.map { ($0, DispatchQueue(label: "live.node.print.\($0.rawValue)")) })
+    }
+
+    /// The answer when the request line and headers already decide it, so the body need not be read.
+    public func response(to head: RequestHead, contentLength: Int) -> Response? {
+        if let early = routeResponse(head) ?? printHeadResponse(head, contentLength: contentLength) {
+            return withCORS(early, head)
+        }
+        return nil
+    }
+
+    public func response(to head: RequestHead, body: Data) async -> Response {
+        if let early = response(to: head, contentLength: body.count) { return early }
+        return withCORS(await route(head, body: body), head)
+    }
+
+    private func routeResponse(_ head: RequestHead) -> Response? {
+        if head.method == "OPTIONS" { return Response(status: 204) }
+        let allowed = switch head.path {
+        case "/status", "/printers": "GET"
+        case "/print": "POST"
+        default: ""
+        }
+        if allowed.isEmpty { return .error(404, "NOT_FOUND", "Not found.") }
+        if head.method != allowed { return .error(405, "METHOD_NOT_ALLOWED", "Method not allowed.") }
+        return nil
+    }
+
+    private func printHeadResponse(_ head: RequestHead, contentLength: Int) -> Response? {
+        guard head.path == "/print" else { return nil }
+        guard Channel(rawValue: head.query["channel"] ?? "") != nil else {
+            return .error(400, "BAD_CHANNEL", "channel must be label or document.")
+        }
+        guard copies(head) != nil else { return .error(400, "BAD_COPIES", "copies must be a whole number from 1 to 99.") }
+        if contentLength > Self.maxBodyBytes { return .error(413, "TOO_LARGE", "The PDF is larger than 50 MB.") }
+        return nil
+    }
+
+    private func copies(_ head: RequestHead) -> Int? {
+        guard let text = head.query["copies"] else { return 1 }
+        guard !text.isEmpty, text.allSatisfy(\.isASCIIDigit), let copies = Int(text), (1 ... 99).contains(copies) else { return nil }
+        return copies
+    }
+
+    private func route(_ head: RequestHead, body: Data) async -> Response {
+        switch head.path {
+        case "/status":
+            let printers = system.printers()
+            let channels = config.config.channels
+            return Response(status: 200, json: Status(
+                version: NodePrint.version,
+                channels: Dictionary(uniqueKeysWithValues: Channel.allCases.map {
+                    ($0.rawValue, ChannelStatus(chosen: channels[$0], among: printers))
+                })
+            ))
+        case "/printers":
+            return Response(status: 200, json: ["printers": system.printers().inListOrder()])
+        default:
+            return await print(head, body: body)
+        }
+    }
+
+    private func print(_ head: RequestHead, body: Data) async -> Response {
+        let channel = Channel(rawValue: head.query["channel"] ?? "")!
+        let title = head.query["title"].flatMap { $0.isEmpty ? nil : $0 } ?? (channel == .label ? "NODE label" : "NODE document")
+        guard let job = PrintJob(channel: channel, pdf: body, copies: copies(head)!, title: title) else {
+            return .error(400, "BAD_DOCUMENT", "The body is not a PDF with at least one page.")
+        }
+        let system = system
+        let config = config
+        return await withCheckedContinuation { continuation in
+            queues[channel]!.async {
+                continuation.resume(returning: Self.run(job, system: system, chosen: config.config.channels[channel]))
+            }
+        }
+    }
+
+    private static func run(_ job: PrintJob, system: any PrintSystem, chosen id: String?) -> Response {
+        guard let id else {
+            return .error(409, "NO_PRINTER", "No \(job.channel.rawValue) printer is chosen in NODE Print.")
+        }
+        guard let printer = system.printers().first(where: { $0.id == id }) else {
+            return .error(409, "PRINTER_UNAVAILABLE", "\(id) is not installed.")
+        }
+        if printer.state == .offline || printer.state == .paused {
+            return .error(409, "PRINTER_UNAVAILABLE", "\(printer.name) is \(printer.state.rawValue).")
+        }
+        do {
+            try system.print(job, on: printer)
+        } catch {
+            return .error(500, "PRINT_FAILED", error.message)
+        }
+        return Response(status: 200, json: ["job": JobReceipt(
+            channel: job.channel, printer: printer.name, pages: job.document.numberOfPages, copies: job.copies
+        )])
+    }
+
+    private func withCORS(_ response: Response, _ head: RequestHead) -> Response {
+        var response = response
+        response.headers.append(("Vary", "Origin"))
+        guard let origin = head.headers["origin"],
+              Self.builtInOrigins.contains(origin) || config.config.allowedOrigins.contains(origin)
+        else { return response }
+        response.headers += [
+            ("Access-Control-Allow-Origin", origin),
+            ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
+            ("Access-Control-Allow-Headers", "Content-Type"),
+            ("Access-Control-Allow-Private-Network", "true"),
+            ("Access-Control-Max-Age", "600"),
+        ]
+        return response
+    }
+}
+
+struct Status: Encodable {
+    let app = "node-print"
+    let version: String
+    let platform = "macos"
+    let channels: [String: ChannelStatus]
+}
+
+struct JobReceipt: Encodable {
+    let channel: Channel
+    let printer: String
+    let pages: Int
+    let copies: Int
+}
+
+extension Character {
+    var isASCIIDigit: Bool { ("0" ... "9").contains(self) }
+}

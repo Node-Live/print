@@ -21,8 +21,10 @@ internal abstract class SourceDocument
     public abstract (double Width, double Height) PageSize(int index);
 
     /// <summary>Rows <paramref name="top"/> to <paramref name="top"/> + <paramref name="rows"/> of the page drawn at the
-    /// placement's size (turned clockwise when it says so), as top-down BGRA on white.</summary>
-    public abstract Task<byte[]> RenderAsync(int index, Placement placement, int top, int rows);
+    /// placement's size (turned clockwise when it says so), as top-down BGRA on white. In
+    /// <paramref name="monochrome"/> every pixel ends up pure black or pure white and images scale by nearest
+    /// neighbour, so a label printer gets nothing to smooth or dither.</summary>
+    public abstract Task<byte[]> RenderAsync(int index, Placement placement, int top, int rows, bool monochrome);
 
     public static async Task<SourceDocument> OpenAsync(ReadOnlyMemory<byte> bytes)
     {
@@ -59,7 +61,7 @@ internal abstract class SourceDocument
             return (page.Size.Width * PointsPerDip, page.Size.Height * PointsPerDip);
         }
 
-        public override async Task<byte[]> RenderAsync(int index, Placement placement, int top, int rows)
+        public override async Task<byte[]> RenderAsync(int index, Placement placement, int top, int rows, bool monochrome)
         {
             using var page = document.GetPage((uint)index);
             var options = new PdfPageRenderOptions
@@ -85,7 +87,8 @@ internal abstract class SourceDocument
             };
             var pixels = await decoder.GetPixelDataAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Ignore, transform,
                 ExifOrientationMode.IgnoreExifOrientation, ColorManagementMode.DoNotColorManage);
-            return pixels.DetachPixelData();
+            byte[] bgra = pixels.DetachPixelData();
+            return monochrome ? Threshold(bgra) : bgra;
         }
     }
 
@@ -99,13 +102,13 @@ internal abstract class SourceDocument
             decoder.OrientedPixelWidth * 72 / (decoder.DpiX > 0 ? decoder.DpiX : 96),
             decoder.OrientedPixelHeight * 72 / (decoder.DpiY > 0 ? decoder.DpiY : 96));
 
-        public override async Task<byte[]> RenderAsync(int index, Placement placement, int top, int rows)
+        public override async Task<byte[]> RenderAsync(int index, Placement placement, int top, int rows, bool monochrome)
         {
             var transform = new BitmapTransform
             {
                 ScaledWidth = (uint)placement.RenderWidth,
                 ScaledHeight = (uint)placement.RenderHeight,
-                InterpolationMode = BitmapInterpolationMode.Fant,
+                InterpolationMode = monochrome ? BitmapInterpolationMode.NearestNeighbor : BitmapInterpolationMode.Fant,
                 Rotation = placement.Rotated ? BitmapRotation.Clockwise90Degrees : BitmapRotation.None,
             };
             var pixels = await decoder.GetPixelDataAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Straight, transform,
@@ -119,7 +122,18 @@ internal abstract class SourceDocument
                 for (int c = 0; c < 3; c++) bgra[i + c] = (byte)((bgra[i + c] * alpha + 255 * (255 - alpha)) / 255);
                 bgra[i + 3] = 255;
             }
-            return bgra;
+            return monochrome ? Threshold(bgra) : bgra;
         }
+    }
+
+    /// <summary>Black below half grey, white from there up; no dithering.</summary>
+    private static byte[] Threshold(byte[] bgra)
+    {
+        for (int i = 0; i < bgra.Length; i += 4)
+        {
+            byte value = 299 * bgra[i + 2] + 587 * bgra[i + 1] + 114 * bgra[i] < 128_000 ? (byte)0 : (byte)255;
+            bgra[i] = bgra[i + 1] = bgra[i + 2] = value;
+        }
+        return bgra;
     }
 }

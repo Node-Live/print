@@ -6,7 +6,8 @@ using Windows.Win32.Storage.Xps;
 namespace NodePrint.Printing;
 
 /// <summary>A job through the printer's driver: each page rasterised at the printer's resolution for the printable
-/// area and drawn through GDI, with the paper and orientation set on the job's DEVMODE.</summary>
+/// area and drawn through GDI pixel for pixel, with the paper and orientation set on the job's DEVMODE. Labels go as
+/// 1-bit black and white, so the driver has no grey to dither.</summary>
 internal static class DriverJob
 {
     public static readonly (int Width, int Length) LabelPaper = (1016, 1524);
@@ -56,7 +57,7 @@ internal static class DriverJob
                     for (int top = 0; top < placement.Height; top += band)
                     {
                         int rows = Math.Min(band, placement.Height - top);
-                        Gdi.Draw(dc, placement, top, rows, await document.RenderAsync(index, placement, top, rows));
+                        Gdi.Draw(dc, placement, top, rows, await document.RenderAsync(index, placement, top, rows, label), label);
                     }
                     Gdi.Check(PInvoke.EndPage(dc), "EndPage");
                 }
@@ -116,27 +117,47 @@ internal static class DriverJob
         public static (int Width, int Height) PrintableArea(HDC dc) =>
             (PInvoke.GetDeviceCaps(dc, GET_DEVICE_CAPS_INDEX.HORZRES), PInvoke.GetDeviceCaps(dc, GET_DEVICE_CAPS_INDEX.VERTRES));
 
-        /// <summary>Draws rows <paramref name="top"/> on of the placed page, rendered 1:1 at device resolution.</summary>
-        public static void Draw(HDC dc, Placement placement, int top, int rows, byte[] pixels)
+        /// <summary>Draws rows <paramref name="top"/> on of the placed page, rendered 1:1 at device resolution;
+        /// <paramref name="monochrome"/> pixels (pure black or white) go as a 1-bit DIB.</summary>
+        public static void Draw(HDC dc, Placement placement, int top, int rows, byte[] pixels, bool monochrome)
         {
-            var bitmap = new BITMAPINFO
+            // BITMAPINFO has room for one palette entry; the 1-bit DIB needs two.
+            byte* info = stackalloc byte[sizeof(BITMAPINFOHEADER) + 2 * sizeof(RGBQUAD)];
+            *(BITMAPINFOHEADER*)info = new BITMAPINFOHEADER
             {
-                bmiHeader = new BITMAPINFOHEADER
-                {
-                    biSize = (uint)sizeof(BITMAPINFOHEADER),
-                    biWidth = placement.Width,
-                    biHeight = -rows,
-                    biPlanes = 1,
-                    biBitCount = 32,
-                    biCompression = (uint)BI_COMPRESSION.BI_RGB,
-                },
+                biSize = (uint)sizeof(BITMAPINFOHEADER),
+                biWidth = placement.Width,
+                biHeight = -rows,
+                biPlanes = 1,
+                biBitCount = (ushort)(monochrome ? 1 : 32),
+                biCompression = (uint)BI_COMPRESSION.BI_RGB,
+                biClrUsed = monochrome ? 2u : 0u,
             };
-            fixed (byte* bits = pixels)
+            var palette = (RGBQUAD*)(info + sizeof(BITMAPINFOHEADER));
+            palette[0] = default;
+            palette[1] = new RGBQUAD { rgbBlue = 255, rgbGreen = 255, rgbRed = 255 };
+            fixed (byte* bits = monochrome ? Pack(pixels, placement.Width, rows) : pixels)
             {
                 int lines = PInvoke.StretchDIBits(dc, placement.X, placement.Y + top, placement.Width, rows,
-                    0, 0, placement.Width, rows, bits, &bitmap, DIB_USAGE.DIB_RGB_COLORS, ROP_CODE.SRCCOPY);
+                    0, 0, placement.Width, rows, bits, (BITMAPINFO*)info, DIB_USAGE.DIB_RGB_COLORS, ROP_CODE.SRCCOPY);
                 if (lines == 0) throw Spooler.Failure("StretchDIBits");
             }
+        }
+
+        /// <summary>Black-or-white BGRA as 1-bit rows (white = 1, leftmost pixel in the high bit), each row padded to
+        /// 4 bytes.</summary>
+        private static byte[] Pack(byte[] bgra, int width, int rows)
+        {
+            int stride = (width + 31) / 32 * 4;
+            var bits = new byte[stride * rows];
+            for (int y = 0; y < rows; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    if (bgra[(y * width + x) * 4] != 0) bits[y * stride + (x >> 3)] |= (byte)(0x80 >> (x & 7));
+                }
+            }
+            return bits;
         }
 
         public static void Check(int result, string call)

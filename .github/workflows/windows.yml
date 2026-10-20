@@ -1,0 +1,80 @@
+name: windows
+
+on:
+  push:
+    branches: [feat/windows, main]
+    paths: ['windows/**', 'docs/**', 'testdata/**', '.github/workflows/windows.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('windows/**/*.csproj', 'windows/Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Version
+        run: |
+          $version = dotnet msbuild windows/NodePrint.Core/NodePrint.Core.csproj -getProperty:Version
+          "VERSION=$version" >> $env:GITHUB_ENV
+          "NODE Print $version"
+
+      - name: Core tests
+        run: dotnet test windows/NodePrint.Core.Tests -c Release
+
+      - name: Publish
+        run: dotnet publish windows/NodePrint.App -c Release -p:Platform=x64 -o dist/app
+
+      - name: Package
+        run: |
+          dotnet tool install -g vpk --version 1.2.161
+          # Signing goes here once Azure Trusted Signing is set up: vpk pack ... --azureTrustedSignFile <metadata.json>
+          vpk pack --packId NodePrint --packVersion $env:VERSION --packDir dist/app --mainExe NodePrint.exe `
+            --packTitle "NODE Print" --packAuthors NODE --icon windows/NodePrint.App/Assets/NodePrint.ico `
+            --outputDir dist/releases
+          Get-ChildItem dist/releases | Format-Table Name, Length -AutoSize
+          "{0:N1} MB published" -f ((Get-ChildItem dist/app -Recurse | Measure-Object Length -Sum).Sum / 1MB)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NodePrint-windows-${{ env.VERSION }}
+          path: dist/releases
+
+      - name: Printers
+        run: windows/ci/printers.ps1
+
+      - name: Windows printing tests
+        run: |
+          dotnet test windows/NodePrint.Printing.Tests -c Release --logger "console;verbosity=normal"
+          $report = Get-ChildItem windows/NodePrint.Printing.Tests/bin -Recurse -Filter route-comparison.txt | Select-Object -First 1
+          if ($report) { Get-Content $report; New-Item -ItemType Directory -Force artifacts/routes | Out-Null; Copy-Item (Join-Path $report.DirectoryName '*-*.pdf'), $report artifacts/routes }
+
+      - name: Run the app
+        if: always()
+        run: windows/ci/run-app.ps1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: NodePrint-windows-run
+          path: artifacts

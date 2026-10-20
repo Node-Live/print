@@ -14,8 +14,7 @@ struct MainView: View {
                     .padding(.top, 17)
             }
             .padding(.horizontal, Theme.inset)
-            TitleCapsule()
-                .frame(maxWidth: .infinity)
+            TitleWordmark()
                 .position(x: Theme.windowSize.width / 2, y: model.titlebarMidY)
             if !model.listening {
                 Text("Port 19233 is in use")
@@ -30,52 +29,27 @@ struct MainView: View {
     }
 }
 
-struct TitleCapsule: View {
+/// The mark, "NODE Print" read as one name, and the version, on one baseline in the middle of the title bar.
+struct TitleWordmark: View {
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 7) {
             LogoMark()
-                .frame(width: 26.5, height: 26.5)
-                .padding(.leading, 8)
-            Text(verbatim: "NODE")
-                .font(.system(size: 14, weight: .bold))
-                .tracking(1.7)
-                .foregroundStyle(Theme.ink)
-                .padding(.leading, 8)
-            Text(verbatim: "Print")
-                .font(.system(size: 13.5, weight: .medium))
-                .foregroundStyle(Theme.ink)
-                .padding(.leading, 8.5)
-            Text(verbatim: "v\(NodePrint.version)")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.secondary)
-                .padding(.leading, 6.5)
-                .padding(.trailing, 14)
+                .frame(width: 17, height: 17)
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text(verbatim: "NODE")
+                    .font(.system(size: 13, weight: .semibold))
+                    .tracking(0.6)
+                Text(verbatim: "Print")
+                    .font(.system(size: 13))
+                    .padding(.leading, 4)
+                Text(verbatim: NodePrint.version)
+                    .font(.system(size: 11).monospacedDigit())
+                    .foregroundStyle(Theme.secondary)
+                    .padding(.leading, 7)
+            }
+            .foregroundStyle(Theme.ink)
         }
-        .frame(height: 38)
         .fixedSize()
-        .modifier(CapsuleSurface())
-    }
-}
-
-/// Liquid Glass on macOS 26, tinted white so it reads as the design's white capsule; a material capsule before it.
-struct CapsuleSurface: ViewModifier {
-    func body(content: Content) -> some View {
-        #if compiler(>=6.2)
-        if #available(macOS 26, *) {
-            content.glassEffect(.regular.tint(.white), in: .capsule)
-        } else {
-            materialCapsule(content)
-        }
-        #else
-        materialCapsule(content)
-        #endif
-    }
-
-    private func materialCapsule(_ content: Content) -> some View {
-        content
-            .background(.regularMaterial, in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.capsuleEdge.opacity(0.6), lineWidth: 0.5))
-            .shadow(color: .black.opacity(0.07), radius: 12, y: 6)
     }
 }
 

@@ -160,6 +160,8 @@ printed, so the web never resends a job on its own.
 { "job": { "channel": "label", "printer": "ZDesigner GX420d", "pages": 1, "copies": 1 } }
 ```
 
+`printer` is the printer's display `name`; `pages` counts the pages of the document as sent, before copies.
+
 Errors:
 
 | status | code                  | when                                                   |

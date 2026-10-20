@@ -147,7 +147,10 @@ holds. `copies` defaults to 1 (1–99). `title` is the job name shown in the OS 
 
 - `label`: every page is printed as one 4 × 6 in label, portrait. A landscape page (see Page geometry) is
   rotated 90° clockwise first. The page is scaled to fit inside the printable area of the 4 × 6 in paper
-  (aspect kept) and centred. The paper is set on the job, not in the printer's defaults; the app reads back
+  (aspect kept) and centred. The app renders the page itself at the queue's resolution (203 dpi when the
+  driver reports none) into one-bit black and white — a dot prints when its luminance is below 128, no
+  dithering, images scaled without interpolation — and hands the driver that bitmap one pixel per dot, so a
+  thermal printer never halftones a barcode. The paper is set on the job, not in the printer's defaults; the app reads back
   the paper the driver settled on and refuses with `PRINT_FAILED` when it is not 4 × 6 in (within 0.08 in on
   either edge), rather than letting the driver print on whatever it fell back to.
 - `document`: every page is printed on Letter, in the page's own orientation, scaled to fit the printable area

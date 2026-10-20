@@ -110,8 +110,9 @@ public struct SystemPrinting: PrintSystem {
         }
         let info = try printInfo(for: printer, channel: job.channel)
         let paper = CGRect(origin: .zero, size: info.paperSize)
-        if job.channel == .label, abs(paper.width - 288) > 1.5 || abs(paper.height - 432) > 1.5 {
-            throw PrintFailure("\(printer.name) did not take 4 × 6 in paper (it chose \(Int(paper.width)) × \(Int(paper.height)) pt).")
+        if job.channel == .label, abs(paper.width - 288) > 5.76 || abs(paper.height - 432) > 5.76 {
+            let size = String(format: "%.2f × %.2f", paper.width / 72, paper.height / 72)
+            throw PrintFailure("The driver set the paper to \(size) in instead of 4 × 6 in.")
         }
         // AppKit lays each page out inside the margins, so the margins are the printable area's and a page is the
         // printable area.

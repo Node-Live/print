@@ -24,7 +24,8 @@ swift test                      # driver-job tests run when a CUPS queue exists
 swift run NodePrintApp          # strings stay English outside the app bundle
 ```
 
-`scripts/package.sh` needs Xcode (universal build); CI runs it on `macos-26`.
+`scripts/package.sh` needs Xcode (universal build); CI runs it on `macos-26`. Window screenshots (both styles, three
+languages) are taken when the workflow is run by hand or the commit message contains `[screenshots]`.
 
 ## Printing
 

@@ -15,13 +15,9 @@ trap crash_reports EXIT
 swiftc -O "$(dirname "$0")/window-id.swift" -o /tmp/window-id
 
 # Launched through LaunchServices so the window comes up active, as a user would see it.
-capture() { # style language file [VAR=value for the app]
+capture() { # style language file
   rm -rf "$HOME/Library/Application Support/NODE Print"
-  if [ -n "${4:-}" ]; then
-    open -n --env "$4" "$app" --args --style "$1" -AppleLanguages "($2)"
-  else
-    open -n "$app" --args --style "$1" -AppleLanguages "($2)"
-  fi
+  open -n "$app" --args --style "$1" -AppleLanguages "($2)"
   local id=""
   for _ in $(seq 1 30); do
     sleep 0.5
@@ -31,7 +27,7 @@ capture() { # style language file [VAR=value for the app]
   # A launch right after the previous copy quit does not always come to the front; opening the running app does.
   open -a "$app"
   sleep 2
-  [ -n "$id" ] && [ -n "$3" ] && screencapture -o -x -l "$id" "$3"
+  [ -n "$id" ] && screencapture -o -x -l "$id" "$3"
   sleep 1
   for pid in $(pgrep -x "NODE Print"); do kill "$pid"; done
   while pgrep -x "NODE Print" > /dev/null; do sleep 0.2; done
@@ -44,15 +40,4 @@ for style in design native; do
   done
 done
 
-# The runner's display is 1x; a 2x render of the design content shows the type in detail (layout only, no glass).
-capture design en "" "NODE_PRINT_SNAPSHOT=$out/design/main-window-design-en-content@2x.png"
-
-swiftc -O "$(dirname "$0")/glass-variants.swift" -o /tmp/glass-variants
-/tmp/glass-variants &
-pid=$!
-sleep 3
-id=$(/tmp/window-id glass-variants || true)
-[ -n "$id" ] && screencapture -o -x -l "$id" "$out/design/glass-variants.png"
-kill "$pid" 2> /dev/null || true
-wait "$pid" || true
 ls -la "$out"/*

@@ -1,8 +1,6 @@
 import AppKit
-import ImageIO
 import NodePrintCore
 import SwiftUI
-import UniformTypeIdentifiers
 
 @main
 struct NodePrintApp: App {
@@ -43,12 +41,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @ObservationIgnored private var fixingSize = false
 
     func applicationWillFinishLaunching(_ notification: Notification) {
-        if let id = Bundle.main.bundleIdentifier,
-           NSRunningApplication.runningApplications(withBundleIdentifier: id).contains(where: { $0 != .current }) {
+        if Self.anotherCopyIsRunning() {
             DistributedNotificationCenter.default().postNotificationName(Self.showWindowNotification, object: nil, deliverImmediately: true)
             exit(0)
         }
         NSApp.setActivationPolicy(.accessory)
+    }
+
+    /// One copy per Mac, whichever user started it: the port belongs to the machine. A copy in this session
+    /// comes to the front on the notification; one in another session cannot, and this one still quits.
+    private static func anotherCopyIsRunning() -> Bool {
+        var mib = [CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0]
+        var size = 0
+        guard sysctl(&mib, 4, nil, &size, nil, 0) == 0 else { return false }
+        var processes = [kinfo_proc](repeating: kinfo_proc(), count: size / MemoryLayout<kinfo_proc>.stride + 16)
+        size = processes.count * MemoryLayout<kinfo_proc>.stride
+        guard sysctl(&mib, 4, &processes, &size, nil, 0) == 0 else { return false }
+        let me = ProcessInfo.processInfo.processIdentifier
+        let name = ProcessInfo.processInfo.processName
+        return processes.prefix(size / MemoryLayout<kinfo_proc>.stride).contains { process in
+            var command = process.kp_proc.p_comm
+            let processName = withUnsafeBytes(of: &command) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+            return process.kp_proc.p_pid != me && processName == name
+        }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -68,23 +83,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         self.server = server
         if !launchedAsLoginItem { showWindow() }
-        if let path = ProcessInfo.processInfo.environment["NODE_PRINT_SNAPSHOT"] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.snapshot(model, to: URL(fileURLWithPath: path)) }
-        }
-    }
-
-    /// Renders the window content to a PNG, for CI runners that may not capture the screen.
-    private func snapshot(_ model: AppModel, to url: URL) {
-        let content = native
-            ? AnyView(NativeView(model: model))
-            : AnyView(MainView(model: model).frame(width: Theme.windowSize.width, height: Theme.windowSize.height))
-        let renderer = ImageRenderer(content: content)
-        renderer.scale = 2
-        guard let image = renderer.cgImage,
-              let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil)
-        else { return }
-        CGImageDestinationAddImage(destination, image, nil)
-        CGImageDestinationFinalize(destination)
     }
 
     private var launchedAsLoginItem: Bool {

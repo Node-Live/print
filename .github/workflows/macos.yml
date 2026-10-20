@@ -5,7 +5,7 @@ on:
     branches: [feat/macos, main]
     paths:
       - "macos/**"
-      - "docs/**"
+      - "docs/protocol.md"
       - "testdata/**"
       - ".github/workflows/macos.yml"
   workflow_dispatch:
@@ -56,7 +56,9 @@ jobs:
       - name: Package
         run: scripts/package.sh
 
+      # Screenshots take a minute of macOS time; they run on demand or when the commit message asks with [screenshots].
       - name: Screenshots
+        if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[screenshots]')
         run: ci/screenshots.sh "dist/NODE Print.app" ../screenshots
 
       - name: Smoke
@@ -71,13 +73,13 @@ jobs:
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[screenshots]'))
         with:
           name: macos-screenshots-design
           path: screenshots/design/
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[screenshots]'))
         with:
           name: macos-screenshots-native
           path: screenshots/native/

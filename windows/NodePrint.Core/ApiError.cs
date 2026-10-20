@@ -37,9 +37,9 @@ public sealed class ApiError(int status, string code, string message) : Exceptio
     public static ApiError PrintFailed(string printer, string detail) =>
         new(500, "PRINT_FAILED", $"The printer \"{printer}\" refused the job: {detail}");
 
-    public static ApiError NotFound() => new(404, "NOT_FOUND", "There is no such resource.");
+    public static ApiError NotFound() => new(404, "NOT_FOUND", "Not found.");
 
-    public static ApiError MethodNotAllowed() => new(405, "METHOD_NOT_ALLOWED", "This method is not allowed here.");
+    public static ApiError MethodNotAllowed() => new(405, "METHOD_NOT_ALLOWED", "Method not allowed.");
 
     private static string ChannelName(Channel channel) => channel == Channel.Label ? "label" : "document";
 }

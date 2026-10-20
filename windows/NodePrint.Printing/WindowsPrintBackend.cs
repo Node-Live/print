@@ -14,13 +14,13 @@ public sealed class WindowsPrintBackend : IPrintBackend
     {
         portMonitors = Spooler.PortMonitors();
         string defaultName = Spooler.DefaultPrinterName();
-        return [.. Spooler.Queues().Where(q => !PrinterRules.IsHidden(q.Port)).Select(q => Describe(q, defaultName))];
+        return [.. Spooler.Queues().Where(q => !PrinterRules.IsHidden(q.Port, q.Name)).Select(q => Describe(q, defaultName))];
     }
 
     public Printer? FindPrinter(string id)
     {
         var queue = Spooler.Find(id);
-        if (queue is null || PrinterRules.IsHidden(queue.Port)) return null;
+        if (queue is null || PrinterRules.IsHidden(queue.Port, queue.Name)) return null;
         if (!portMonitors.ContainsKey(queue.Port)) portMonitors = Spooler.PortMonitors();
         return Describe(queue, Spooler.DefaultPrinterName());
     }

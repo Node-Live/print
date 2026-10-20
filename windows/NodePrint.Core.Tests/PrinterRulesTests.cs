@@ -3,16 +3,20 @@ namespace NodePrint.Core.Tests;
 public sealed class PrinterRulesTests
 {
     [Theory]
-    [InlineData("PORTPROMPT:", true)]
-    [InlineData("nul:", true)]
-    [InlineData("SHRFAX:", true)]
-    [InlineData("FILE:", true)]
-    [InlineData(@"C:\ci\label.pdf", false)]
-    [InlineData("USB001", false)]
-    [InlineData("Microsoft.Office.OneNote_16001.14326.0_x64__8wekyb3d8bbwe_microsoft.onenoteim_S-1-5-21", false)]
-    public void Queues_are_hidden_by_their_port_only(string port, bool hidden)
+    [InlineData("PORTPROMPT:", "Microsoft Print to PDF", true)]
+    [InlineData("nul:", "OneNote (Desktop)", true)]
+    [InlineData("SHRFAX:", "Fax", true)]
+    [InlineData("FILE:", "Generic / Text Only", true)]
+    [InlineData("USB001", "导出为WPS PDF", true)]
+    [InlineData("Ne00:", "Adobe PDF", true)]
+    [InlineData("WSD-1234", "Microsoft XPS Document Writer", true)]
+    [InlineData("USB002", "Send To OneNote 2016", true)]
+    [InlineData("IP_10.0.0.9", "Office FAX Brother", true)]
+    [InlineData(@"C:\ci\label.pdf", "NODE CI Label", false)]
+    [InlineData("USB001", "ZDesigner GX420d", false)]
+    public void Virtual_queues_are_hidden_by_port_or_name(string port, string name, bool hidden)
     {
-        Assert.Equal(hidden, PrinterRules.IsHidden(port));
+        Assert.Equal(hidden, PrinterRules.IsHidden(port, name));
     }
 
     [Theory]

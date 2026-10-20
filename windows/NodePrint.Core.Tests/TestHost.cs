@@ -10,15 +10,19 @@ internal sealed class FakeBackend : IPrintBackend
     public List<(string Printer, Channel Channel, int Copies, string Title, int Bytes)> Jobs { get; } = [];
     public Func<ReadOnlyMemory<byte>, int> Pages { get; set; } = _ => 1;
 
+    /// <summary>Runs as a job starts printing, before it is recorded; a test can hold a job here.</summary>
+    public Func<ReadOnlyMemory<byte>, Task> Starting { get; set; } = _ => Task.CompletedTask;
+
     public IReadOnlyList<Printer> GetPrinters() => Installed;
 
     public Printer? FindPrinter(string id) => Installed.FirstOrDefault(p => p.Id == id);
 
-    public Task<int> PrintAsync(Printer printer, Channel channel, ReadOnlyMemory<byte> document, int copies, string title)
+    public async Task<int> PrintAsync(Printer printer, Channel channel, ReadOnlyMemory<byte> document, int copies, string title)
     {
+        await Starting(document);
         int pages = Pages(document);
         Jobs.Add((printer.Id, channel, copies, title, document.Length));
-        return Task.FromResult(pages);
+        return pages;
     }
 
     public static Printer Make(string name, PrinterKind kind = PrinterKind.Other, PrinterState state = PrinterState.Ready,

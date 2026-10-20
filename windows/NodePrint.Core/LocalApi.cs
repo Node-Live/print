@@ -82,7 +82,6 @@ public static class LocalApi
                     await PrintAsync(context, service);
                     break;
             }
-            if (fromNode) service.MarkLinked();
         }
         catch (ApiError error)
         {

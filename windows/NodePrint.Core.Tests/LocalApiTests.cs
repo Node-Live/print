@@ -364,26 +364,6 @@ public sealed class LocalApiTests
         Assert.Equal("http://localhost:5173", Header(response, "Access-Control-Allow-Origin"));
     }
 
-    [Fact]
-    public async Task Only_a_successful_answer_to_a_node_origin_counts_as_linked()
-    {
-        await using var host = await TestHost.StartAsync(new FakeBackend());
-
-        await host.Client.GetAsync("/status");
-        var foreign = new HttpRequestMessage(HttpMethod.Get, "/status");
-        foreign.Headers.Add("Origin", "https://evil.example.com");
-        await host.Client.SendAsync(foreign);
-        var failing = new HttpRequestMessage(HttpMethod.Post, "/print");
-        failing.Headers.Add("Origin", "https://nrp.node.live");
-        await host.Client.SendAsync(failing);
-        Assert.Null(host.Service.LastLinked);
-
-        var node = new HttpRequestMessage(HttpMethod.Get, "/status");
-        node.Headers.Add("Origin", "https://nrp.node.live");
-        await host.Client.SendAsync(node);
-        Assert.NotNull(host.Service.LastLinked);
-    }
-
     private static string? Header(HttpResponseMessage response, string name) =>
         response.Headers.TryGetValues(name, out var values) ? string.Join(",", values) : null;
 

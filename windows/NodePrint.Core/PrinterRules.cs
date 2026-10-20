@@ -9,10 +9,13 @@ public static partial class PrinterRules
     private const int PaperTolerance = 10;
 
     private static readonly string[] HiddenPorts = ["PORTPROMPT:", "FILE:", "NUL", "SHRFAX:"];
+    private static readonly string[] VirtualNames = ["PDF", "XPS", "Fax", "OneNote"];
 
-    /// <summary>Queues whose port opens a dialog or is not a device. By port only, never by name.</summary>
-    public static bool IsHidden(string portName) =>
-        HiddenPorts.Any(p => portName.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+    /// <summary>Virtual queues: a port that opens a dialog or is not a device, or a name that says PDF, XPS, Fax or
+    /// OneNote, which is how third-party "print to PDF" queues on ordinary ports show themselves.</summary>
+    public static bool IsHidden(string portName, string queueName) =>
+        HiddenPorts.Any(p => portName.StartsWith(p, StringComparison.OrdinalIgnoreCase)) ||
+        VirtualNames.Any(n => queueName.Contains(n, StringComparison.OrdinalIgnoreCase));
 
     public static Connection ConnectionOf(string portName, string monitorName, bool sharedConnection)
     {

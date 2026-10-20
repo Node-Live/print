@@ -3,8 +3,8 @@
 # (title bar and materials included) into $2/<style>/.
 set -euo pipefail
 app=$1
-out=$2
-binary="$app/Contents/MacOS/NODE Print"
+mkdir -p "$2"
+out=$(cd "$2" && pwd)
 crash_reports() {
   for report in "$HOME"/Library/Logs/DiagnosticReports/NODE*; do
     [ -e "$report" ] && head -c 8000 "$report"
@@ -14,10 +14,14 @@ crash_reports() {
 trap crash_reports EXIT
 swiftc -O "$(dirname "$0")/window-id.swift" -o /tmp/window-id
 
-capture() { # style language file [extra env]
+# Launched through LaunchServices so the window comes up active, as a user would see it.
+capture() { # style language file [VAR=value for the app]
   rm -rf "$HOME/Library/Application Support/NODE Print"
-  env ${4:-} "$binary" --style "$1" -AppleLanguages "($2)" &
-  local pid=$!
+  if [ -n "${4:-}" ]; then
+    open -n --env "$4" "$app" --args --style "$1" -AppleLanguages "($2)"
+  else
+    open -n "$app" --args --style "$1" -AppleLanguages "($2)"
+  fi
   local id=""
   for _ in $(seq 1 30); do
     sleep 0.5
@@ -27,8 +31,8 @@ capture() { # style language file [extra env]
   sleep 2
   [ -n "$id" ] && [ -n "$3" ] && screencapture -o -x -l "$id" "$3"
   sleep 1
-  kill "$pid" 2> /dev/null || true
-  wait "$pid" || true
+  for pid in $(pgrep -x "NODE Print"); do kill "$pid"; done
+  while pgrep -x "NODE Print" > /dev/null; do sleep 0.2; done
 }
 
 for style in design native; do

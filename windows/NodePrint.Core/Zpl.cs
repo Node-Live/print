@@ -5,23 +5,21 @@ namespace NodePrint.Core;
 /// <summary>Labels as raw ZPL: a 1-bit bitmap in a ^GFA field with ZPL's ASCII compression.</summary>
 public static class Zpl
 {
-    /// <summary>Places a rendered BGRA page on a white label and thresholds it to packed 1-bit rows, most significant
-    /// bit first, 1 where a dot prints.</summary>
-    public static byte[] Pack(ReadOnlySpan<byte> bgra, int stride, Placement placement, int labelWidth, int labelLength)
+    /// <summary>Places a page rendered at the placement's drawn size (top-down BGRA, already turned) on a white
+    /// label and thresholds it to packed 1-bit rows, most significant bit first, 1 where a dot prints.</summary>
+    public static byte[] Pack(ReadOnlySpan<byte> bgra, Placement placement, int labelWidth, int labelLength)
     {
         int bytesPerRow = (labelWidth + 7) / 8;
         var packed = new byte[bytesPerRow * labelLength];
+        int stride = placement.Width * 4;
         int top = Math.Max(placement.Y, 0), bottom = Math.Min(placement.Y + placement.Height, labelLength);
         int left = Math.Max(placement.X, 0), right = Math.Min(placement.X + placement.Width, labelWidth);
         for (int y = top; y < bottom; y++)
         {
-            int by = y - placement.Y;
+            int row = (y - placement.Y) * stride;
             for (int x = left; x < right; x++)
             {
-                int bx = x - placement.X;
-                int sx = placement.Rotated ? by : bx;
-                int sy = placement.Rotated ? placement.RenderHeight - 1 - bx : by;
-                int i = sy * stride + sx * 4;
+                int i = row + (x - placement.X) * 4;
                 // 0.299 R + 0.587 G + 0.114 B < 128, in integers so every platform agrees at the boundary.
                 if (299 * bgra[i + 2] + 587 * bgra[i + 1] + 114 * bgra[i] < 128_000)
                 {

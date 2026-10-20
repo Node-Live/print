@@ -102,6 +102,20 @@ public sealed class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void A_config_that_does_not_parse_is_left_alone()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Store.Path)!);
+        File.WriteAllText(Store.Path, "{ \"channels\": ");
+        var backend = new FakeBackend();
+        backend.Installed.Add(FakeBackend.Make("Zebra", PrinterKind.Thermal));
+
+        var service = PrintService.Open(backend, Store);
+
+        Assert.Null(service.ChosenId(Channel.Label));
+        Assert.Equal("{ \"channels\": ", File.ReadAllText(Store.Path));
+    }
+
+    [Fact]
     public void Choosing_a_printer_is_saved()
     {
         Store.Save(new AppConfig());

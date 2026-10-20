@@ -88,4 +88,14 @@ public sealed class PrinterRulesTests
         Assert.Equal(state, PrinterRules.StateOf(status, attributes, jobs, out string text));
         Assert.Equal(message, text);
     }
+
+    [Fact]
+    public void A_card_names_only_the_papers_its_channel_prints_on()
+    {
+        var printer = FakeBackend.Make("Brother") with { Papers = ["4x6", "Letter", "A4"] };
+
+        Assert.Equal(["4x6"], PrinterRules.CardPapers(printer, Channel.Label));
+        Assert.Equal(["Letter", "A4"], PrinterRules.CardPapers(printer, Channel.Document));
+        Assert.Empty(PrinterRules.CardPapers(printer with { Papers = ["Letter"] }, Channel.Label));
+    }
 }

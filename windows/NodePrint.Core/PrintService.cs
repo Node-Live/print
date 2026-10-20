@@ -29,10 +29,19 @@ public sealed class PrintService
         this.config = config;
     }
 
-    /// <summary>Loads the config file, or on first run picks the printers and writes it.</summary>
+    /// <summary>Loads the config file, or on first run picks the printers and writes it. A file that does not parse is
+    /// left alone (it is someone's hand edit) and the app starts with nothing chosen.</summary>
     public static PrintService Open(IPrintBackend backend, ConfigStore store)
     {
-        var config = store.Load();
+        AppConfig? config;
+        try
+        {
+            config = store.Load();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return new PrintService(backend, store, new AppConfig());
+        }
         if (config is null)
         {
             config = new AppConfig { Channels = FirstRunChoice(backend.GetPrinters()) };

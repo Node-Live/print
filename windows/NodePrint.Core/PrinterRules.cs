@@ -47,6 +47,11 @@ public static partial class PrinterRules
         return papers;
     }
 
+    /// <summary>The papers a channel's card names: the label size for labels, Letter and A4 for documents.</summary>
+    public static IReadOnlyList<string> CardPapers(Printer printer, Channel channel) => channel == Channel.Label
+        ? [.. printer.Papers.Where(p => p == Papers.FourBySix)]
+        : [.. printer.Papers.Where(p => p is Papers.Letter or Papers.A4)];
+
     /// <summary>A ZPL queue, or one whose largest paper is no wider than a label.</summary>
     public static PrinterKind KindOf(bool zpl, IReadOnlyCollection<(int Width, int Length)> sizes)
     {
@@ -102,9 +107,10 @@ public static partial class PrinterRules
     [GeneratedRegex(@"^\d{1,3}(\.\d{1,3}){3}")]
     private static partial Regex IPv4Prefix();
 
-    private static bool Matches((int Width, int Length) size, int width, int length)
+    /// <summary>Whether a driver paper (0.1 mm) is this size in either orientation, give or take a millimetre.</summary>
+    public static bool Matches((int Width, int Length) size, int width, int length)
     {
         int w = Math.Min(size.Width, size.Length), l = Math.Max(size.Width, size.Length);
-        return Math.Abs(w - width) <= PaperTolerance && Math.Abs(l - length) <= PaperTolerance;
+        return Math.Abs(w - Math.Min(width, length)) <= PaperTolerance && Math.Abs(l - Math.Max(width, length)) <= PaperTolerance;
     }
 }

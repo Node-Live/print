@@ -56,7 +56,7 @@ public sealed class ZplTests
     {
         byte[] page = [127, 127, 127, 255, /**/ 128, 128, 128, 255, /**/ 255, 255, 255, 255, /**/ 0, 0, 0, 255];
 
-        var packed = Zpl.Pack(page, 16, new Placement(0, 0, 4, 1, false), 8, 1);
+        var packed = Zpl.Pack(page, new Placement(0, 0, 4, 1, false), 8, 1);
 
         Assert.Equal([0b1001_0000], packed);
     }
@@ -67,20 +67,8 @@ public sealed class ZplTests
         byte[] black = new byte[2 * 2 * 4];
         for (int i = 3; i < black.Length; i += 4) black[i] = 255;
 
-        var packed = Zpl.Pack(black, 8, new Placement(3, 1, 2, 2, false), 16, 4);
+        var packed = Zpl.Pack(black, new Placement(3, 1, 2, 2, false), 16, 4);
 
         Assert.Equal("0000" + "1800" + "1800" + "0000", Convert.ToHexString(packed));
-    }
-
-    [Fact]
-    public void A_rotated_page_turns_clockwise()
-    {
-        // A 3 × 2 page with only its top-left pixel black lands, turned clockwise, at the top-right of a 2 × 3 box.
-        byte[] page = Enumerable.Repeat((byte)255, 3 * 2 * 4).ToArray();
-        page[0] = page[1] = page[2] = 0;
-
-        var packed = Zpl.Pack(page, 12, new Placement(0, 0, 2, 3, true), 8, 3);
-
-        Assert.Equal([0b0100_0000, 0, 0], packed);
     }
 }

@@ -87,7 +87,7 @@ private final class HTTPConnection: @unchecked Sendable {
             headers[line[..<colon].lowercased()] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
         }
         let head = RequestHead(method: String(requestLine[0]), target: String(requestLine[1]), headers: headers)
-        let length = Int(headers["content-length"] ?? "") ?? 0
+        let length = max(0, Int(headers["content-length"] ?? "") ?? 0)
 
         if let response = api.response(to: head, contentLength: length) {
             send(response) { [self] in drain(length - buffer.count) }

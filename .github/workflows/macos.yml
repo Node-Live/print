@@ -1,0 +1,77 @@
+name: macos
+
+on:
+  push:
+    branches: [feat/macos, main]
+    paths:
+      - "macos/**"
+      - "docs/**"
+      - "testdata/**"
+      - ".github/workflows/macos.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: macos
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Select Xcode 27
+        run: |
+          ls -d /Applications/Xcode*.app
+          xcode=$(ls -d /Applications/Xcode_27*.app 2> /dev/null | sort -V | tail -1)
+          if [ -z "$xcode" ]; then
+            echo "::warning::no Xcode 27 on this image, using the newest Xcode"
+            xcode=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          fi
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+          swift --version
+          sw_vers
+
+      - name: Version
+        id: version
+        run: echo "version=$(sed -n 's/.*static let version = "\(.*\)".*/\1/p' Sources/NodePrintCore/Version.swift)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: macos/.build
+          key: spm-${{ runner.os }}-${{ hashFiles('macos/Package.swift') }}-${{ github.sha }}
+          restore-keys: spm-${{ runner.os }}-${{ hashFiles('macos/Package.swift') }}-
+
+      - name: Print queues
+        run: ci/setup-printers.sh
+
+      - name: Test
+        run: swift test
+
+      - name: Package
+        run: scripts/package.sh
+
+      - name: Screenshots
+        run: ci/screenshots.sh "dist/NODE Print.app" ../screenshots
+
+      - name: Smoke
+        run: ci/smoke.sh "dist/NODE Print.app" ../testdata
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NODE-Print-${{ steps.version.outputs.version }}-macos
+          path: |
+            macos/dist/*.zip
+            macos/dist/*.dmg
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-screenshots
+          path: screenshots/

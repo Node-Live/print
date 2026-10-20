@@ -1,6 +1,8 @@
 import AppKit
+import ImageIO
 import NodePrintCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 @main
 struct NodePrintApp: App {
@@ -66,6 +68,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             NSLog("NODE Print: cannot listen: %@", error.localizedDescription)
         }
         showWindow()
+        if let path = ProcessInfo.processInfo.environment["NODE_PRINT_SNAPSHOT"] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.snapshot(model, to: URL(fileURLWithPath: path)) }
+        }
+    }
+
+    /// Renders the window content to a PNG, for CI runners that may not capture the screen.
+    private func snapshot(_ model: AppModel, to url: URL) {
+        let renderer = ImageRenderer(content: MainView(model: model))
+        renderer.scale = 2
+        guard let image = renderer.cgImage,
+              let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil)
+        else { return }
+        CGImageDestinationAddImage(destination, image, nil)
+        CGImageDestinationFinalize(destination)
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

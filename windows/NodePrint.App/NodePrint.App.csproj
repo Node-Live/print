@@ -45,4 +45,11 @@
     <Content Include="Assets\NodePrint.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- Symbols stay with the build; the installer carries only what runs. -->
+  <Target Name="LeaveSymbolsOutOfPublish" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
+
 </Project>

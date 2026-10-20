@@ -53,6 +53,28 @@ public static class Screen {
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern void mouse_event(int flags, int dx, int dy, int data, IntPtr extra);
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hwnd);
+    delegate bool EnumProc(IntPtr hwnd, IntPtr data);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc callback, IntPtr data);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr hwnd, System.Text.StringBuilder text, int max);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hwnd, System.Text.StringBuilder text, int max);
+    public static System.Collections.Generic.List<string> Describe(uint pid, out IntPtr main) {
+        var found = new System.Collections.Generic.List<string>();
+        IntPtr best = IntPtr.Zero;
+        EnumWindows((hwnd, data) => {
+            uint owner; GetWindowThreadProcessId(hwnd, out owner);
+            if (owner != pid) return true;
+            var title = new System.Text.StringBuilder(256); GetWindowText(hwnd, title, 256);
+            var cls = new System.Text.StringBuilder(256); GetClassName(hwnd, cls, 256);
+            RECT r; DwmGetWindowAttribute(hwnd, 9, out r, 16);
+            found.Add(string.Format("{0} '{1}' {2} visible={3} {4},{5} {6}x{7}", hwnd, title, cls, IsWindowVisible(hwnd), r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top));
+            if (title.ToString() == "NODE Print" && best == IntPtr.Zero) best = hwnd;
+            return true;
+        }, IntPtr.Zero);
+        main = best;
+        return found;
+    }
 }
 '@
 function Save-Screen([int] $left, [int] $top, [int] $width, [int] $height, [string] $path) {
@@ -62,7 +84,12 @@ function Save-Screen([int] $left, [int] $top, [int] $width, [int] $height, [stri
     $bitmap.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
     $graphics.Dispose(); $bitmap.Dispose()
 }
-$window = [Screen]::FindWindow($null, 'NODE Print')
+Add-Type -AssemblyName System.Windows.Forms
+$desktop = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+Start-Sleep -Seconds 2
+Save-Screen 0 0 $desktop.Width $desktop.Height (Join-Path $Out 'desktop.png')
+$window = [IntPtr]::Zero
+[Screen]::Describe([uint32]$process.Id, [ref] $window)
 if ($window -eq [IntPtr]::Zero) { throw 'No NODE Print window' }
 [Screen]::SetForegroundWindow($window) | Out-Null
 Start-Sleep -Seconds 3
@@ -80,7 +107,6 @@ Start-Sleep -Milliseconds 300
 [Screen]::mouse_event(0x2, 0, 0, 0, [IntPtr]::Zero); [Screen]::mouse_event(0x4, 0, 0, 0, [IntPtr]::Zero)
 Start-Sleep -Seconds 2
 Save-Screen $rect.Left $rect.Top $width ([Math]::Min($height + 300, 768 - $rect.Top)) (Join-Path $Out 'printer-list.png')
-Add-Type -AssemblyName System.Windows.Forms
 [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
 
 function Get-PdfPages([string] $path) {

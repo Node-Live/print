@@ -163,7 +163,9 @@ Invoke-Print 'document' 'windows/NodePrint.Printing.Tests/Fixtures/letter-mixed.
 
 # The URL form: the app downloads the label itself, here from a file server on the loopback.
 $files = Start-Process python -ArgumentList '-m', 'http.server', '8099', '--bind', '127.0.0.1', '--directory', 'testdata/zpl' -PassThru -WindowStyle Hidden
-Start-Sleep -Seconds 2
+foreach ($try in 1..40) {
+    try { Invoke-WebRequest -Uri 'http://127.0.0.1:8099/' -TimeoutSec 2 | Out-Null; break } catch { Start-Sleep -Milliseconds 250 }
+}
 Invoke-Print 'label' 'http://127.0.0.1:8099/border-4x6-203.pdf' 'url' 'C:\nodeprint-ci\label.pdf' @('288x432')
 $missing = Invoke-WebRequest -Method Post -Uri "$api/print?channel=label" -ContentType 'application/json' -Body '{"url":"http://127.0.0.1:8099/missing.pdf"}' -SkipHttpErrorCheck
 "missing url -> $($missing.StatusCode) $($missing.Content)"

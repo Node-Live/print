@@ -3,7 +3,7 @@ name: windows
 on:
   push:
     branches: [feat/windows, main]
-    paths: ['windows/**', 'docs/**', 'testdata/**', '.github/workflows/windows.yml']
+    paths: ['windows/**', 'docs/protocol.md', 'testdata/**', '.github/workflows/windows.yml']
   workflow_dispatch:
 
 concurrency:

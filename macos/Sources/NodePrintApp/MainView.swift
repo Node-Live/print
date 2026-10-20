@@ -228,7 +228,7 @@ struct PrinterList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             if model.printers.isEmpty {
-                Text("No printers")
+                Text("No printers found")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.secondary)
                     .padding(10)

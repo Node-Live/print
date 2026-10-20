@@ -29,10 +29,14 @@ func connectionFollowsTheDeviceURI(uri: String, connection: Connection) {
     #expect(PrinterCatalog.installedBackends.isSuperset(of: ["usb", "ipp", "dnssd", "socket", "lpd"]))
 }
 
-@Test func callsAQueueWhoseLargestPaperIsALabelThermal() {
-    #expect(PrinterCatalog.isLabelSize(largest: [(5080, 2540), (10160, 15240), (10160, 20320)]))
-    #expect(!PrinterCatalog.isLabelSize(largest: [(10160, 15240), (21590, 27940)]))
-    #expect(!PrinterCatalog.isLabelSize(largest: []))
+@Test func callsAQueueWithALabelSizeAndNoOfficePaperThermal() {
+    // The CUPS Zebra driver lists 4 in labels next to sizes up to 8 x 6.5 in.
+    #expect(PrinterCatalog.isLabelPrinter([(5080, 2540), (10160, 15240), (10160, 33020), (20320, 16510)]))
+    #expect(PrinterCatalog.isLabelPrinter([(10160, 15240)]))
+    #expect(!PrinterCatalog.isLabelPrinter([(10160, 15240), (21590, 27940)]))
+    #expect(!PrinterCatalog.isLabelPrinter([(10160, 15240), (21000, 29700)]))
+    #expect(!PrinterCatalog.isLabelPrinter([(14800, 21000), (25700, 36400)]))
+    #expect(!PrinterCatalog.isLabelPrinter([]))
 }
 
 @Test func reportsOnlyTheThreeKnownPapers() {

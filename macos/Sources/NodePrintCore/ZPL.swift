@@ -119,8 +119,8 @@ public enum ZPL {
         for y in 0 ..< length {
             for x in 0 ..< width {
                 let o = y * rgbaPerRow + x * 4
-                let luminance = 0.299 * Double(pixels[o]) + 0.587 * Double(pixels[o + 1]) + 0.114 * Double(pixels[o + 2])
-                if luminance < 128 {
+                let luminance = 299 * Int(pixels[o]) + 587 * Int(pixels[o + 1]) + 114 * Int(pixels[o + 2])
+                if luminance < 128_000 {
                     bits[y * bytesPerRow + (x >> 3)] |= 0x80 >> UInt8(x & 7)
                 }
             }

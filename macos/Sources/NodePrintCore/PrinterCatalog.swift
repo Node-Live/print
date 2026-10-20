@@ -52,7 +52,7 @@ public enum PrinterCatalog {
             name: info.isEmpty ? id : info,
             model: options["printer-make-and-model"] ?? "",
             connection: connection(deviceURI: deviceURI),
-            kind: isLabelSize(largest: sizes) ? .thermal : .other,
+            kind: isLabelPrinter(sizes) ? .thermal : .other,
             papers: papers(sizes),
             dpi: dpi,
             state: state,
@@ -112,9 +112,10 @@ public enum PrinterCatalog {
         }
     }
 
-    /// A queue whose largest paper is no wider than a 4 in label roll (108 mm) is a label printer.
-    static func isLabelSize(largest sizes: [(width: Int, length: Int)]) -> Bool {
-        guard let largest = sizes.max(by: { $0.width * $0.length < $1.width * $1.length }) else { return false }
-        return min(largest.width, largest.length) <= 10800
+    /// A label printer lists a paper no wider than 4.25 in (108 mm) and neither Letter nor A4, which every office
+    /// printer lists; label drivers often list wide sizes for other models too.
+    static func isLabelPrinter(_ sizes: [(width: Int, length: Int)]) -> Bool {
+        let office = papers(sizes).contains { $0 == .letter || $0 == .a4 }
+        return !office && sizes.contains { min($0.width, $0.length) <= 10800 }
     }
 }

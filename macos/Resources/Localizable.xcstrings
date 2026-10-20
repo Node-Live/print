@@ -54,7 +54,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Elegir una impresora"
+            "value": "Elige una impresora"
           }
         },
         "zh-Hans": {
@@ -193,18 +193,18 @@
         }
       }
     },
-    "No printers": {
+    "No printers found": {
       "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No hay impresoras"
-          }
-        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "没有打印机"
+            "value": "没有找到打印机"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se encontraron impresoras"
           }
         }
       }
@@ -220,7 +220,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "未找到"
+            "value": "找不到"
           }
         }
       }
@@ -294,7 +294,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hojas de picking y de empaque · Carta"
+            "value": "Hojas de picking y albaranes · Carta"
           }
         },
         "zh-Hans": {

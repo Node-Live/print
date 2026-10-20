@@ -41,16 +41,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @ObservationIgnored private var fixingSize = false
 
     func applicationWillFinishLaunching(_ notification: Notification) {
-        if Self.anotherCopyIsRunning() {
+        if Self.anotherCopyOfThisUserIsRunning() {
             DistributedNotificationCenter.default().postNotificationName(Self.showWindowNotification, object: nil, deliverImmediately: true)
             exit(0)
         }
         NSApp.setActivationPolicy(.accessory)
     }
 
-    /// One copy per Mac, whichever user started it: the port belongs to the machine. A copy in this session
-    /// comes to the front on the notification; one in another session cannot, and this one still quits.
-    private static func anotherCopyIsRunning() -> Bool {
+    /// Another copy of this user's comes to the front instead. A copy in another user's session cannot; this one
+    /// then opens as usual and, finding the port taken, says so.
+    private static func anotherCopyOfThisUserIsRunning() -> Bool {
         var mib = [CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0]
         var size = 0
         guard sysctl(&mib, 4, nil, &size, nil, 0) == 0 else { return false }
@@ -59,10 +59,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         guard sysctl(&mib, 4, &processes, &size, nil, 0) == 0 else { return false }
         let me = ProcessInfo.processInfo.processIdentifier
         let name = ProcessInfo.processInfo.processName
+        let user = getuid()
         return processes.prefix(size / MemoryLayout<kinfo_proc>.stride).contains { process in
             var command = process.kp_proc.p_comm
             let processName = withUnsafeBytes(of: &command) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
-            return process.kp_proc.p_pid != me && processName == name
+            return process.kp_proc.p_pid != me && process.kp_eproc.e_ucred.cr_uid == user && processName == name
         }
     }
 

@@ -354,10 +354,10 @@ func samplePDF(pages: Int = 1, size: CGSize = CGSize(width: 288, height: 432)) -
         let system = FakePrinting([rollo])
         let harness = try await Harness.start(system, channels: .init(label: rollo.id))
         // A takes longer to open than B, but its body is in first.
-        let a = fixturePNG(width: 812, height: 1218)
+        let a = fixturePNG(width: 1624, height: 2436)
         let b = samplePDF()
         async let first = harness.send("POST", "/print?channel=label&title=A", body: a)
-        try await Task.sleep(for: .milliseconds(5))
+        try await Task.sleep(for: .milliseconds(30))
         async let second = harness.send("POST", "/print?channel=label&title=B", body: b)
         let statuses = try await [first.status, second.status]
         #expect(statuses == [200, 200])

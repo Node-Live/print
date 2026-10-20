@@ -20,8 +20,10 @@ app after editing it by hand. Unexpected failures (including the port being take
 `error.log` in the same folder.
 
 Every job goes through the printer's driver: each page of the PDF (`Windows.Data.Pdf`) or the PNG / JPEG is rendered
-at the printer's resolution for the printable area and drawn through GDI, on a DEVMODE that is the driver's own with
-the paper (4 × 6 in or Letter) and orientation set; a label job stops when the driver did not take 4 × 6 in.
+at the printer's resolution for the printable area and drawn through GDI pixel for pixel, on a DEVMODE that is the
+driver's own with the paper (4 × 6 in or Letter) and orientation set; a label job stops when the driver did not take
+4 × 6 in. Labels go as a 1-bit bitmap: black below half grey, white above, no dithering, images scaled by nearest
+neighbour.
 
 `--tray` starts the app in the tray, as the Run key does.
 

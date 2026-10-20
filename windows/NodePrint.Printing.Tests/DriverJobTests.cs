@@ -65,6 +65,31 @@ public sealed class DriverJobTests
         Assert.Equal(((792.0, 612.0), Corner.TopRight, false), (document.Size, document.Mark, document.InkOnEdges));
     }
 
+    [Fact]
+    public async Task A_300_dpi_barcode_label_comes_out_in_pure_black_and_white_with_every_bar()
+    {
+        // A 4 x 6 in page around a 1800 x 1200 grey bitmap at 300 dpi, turned onto the page as carrier labels have it,
+        // with 40 bars of 3 px modules across the middle; drawn here for a 203 dpi label printer.
+        string fixture = Path.Combine("Fixtures", "label-barcode-300dpi.pdf");
+        var document = await SourceDocument.OpenAsync(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, fixture)));
+        var placement = PageLayout.Label(288, 432, 812, 1218);
+
+        byte[] pixels = await document.RenderAsync(0, placement, 0, placement.Height, monochrome: true);
+        int bars = 0;
+        bool inBar = false;
+        for (int y = 0; y < placement.Height; y++)
+        {
+            bool dark = pixels[(y * placement.Width + placement.Width / 2) * 4] == 0;
+            if (dark && !inBar) bars++;
+            inBar = dark;
+        }
+
+        Assert.DoesNotContain(pixels, value => value is not (0 or 255));
+        Assert.Equal(40, bars);
+        var printed = Assert.Single(await PrintAsync(LabelQueue, Channel.Label, fixture, 1));
+        Assert.Equal((288.0, 432.0), printed.Size);
+    }
+
     private enum Corner { None, TopLeft, TopRight, BottomLeft, BottomRight, Several }
 
     private sealed record OutputPage((double Width, double Height) Size, Corner Mark, bool InkOnEdges);
@@ -135,7 +160,7 @@ public sealed class DriverJobTests
     private static async Task<(Corner Mark, bool InkOnEdges)> LookAsync(SourceDocument document, int index, double width, double height)
     {
         int w = (int)Math.Round(width / 2), h = (int)Math.Round(height / 2); // 36 px per inch
-        byte[] pixels = await document.RenderAsync(index, new Placement(0, 0, w, h, false), 0, h);
+        byte[] pixels = await document.RenderAsync(index, new Placement(0, 0, w, h, false), 0, h, monochrome: false);
         bool Dark(int x, int y) => 299 * pixels[(y * w + x) * 4 + 2] + 587 * pixels[(y * w + x) * 4 + 1] + 114 * pixels[(y * w + x) * 4] < 100_000;
         var dark = new[]
         {

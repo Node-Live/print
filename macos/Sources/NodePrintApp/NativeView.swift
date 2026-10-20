@@ -16,11 +16,6 @@ struct NativeView: View {
             NativeChannelSection(channel: .label, model: model)
             NativeChannelSection(channel: .document, model: model)
             Section {
-                Label {
-                    Text(model.linked ? "Linked to NODE" : "Waiting for NODE")
-                } icon: {
-                    Image(systemName: "circle.fill").foregroundStyle(model.linked ? .green : .secondary)
-                }
                 LabeledContent("Version", value: NodePrint.version)
             }
         }

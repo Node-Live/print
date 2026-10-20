@@ -11,20 +11,16 @@ final class AppModel {
     private(set) var launchAtLogin: Bool
     /// Whether the local server holds its port.
     var listening = true
-    /// Whether a NODE page has reached the local server within the last minute.
-    private(set) var linked = false
     /// Distance from the window top to the centre of the traffic lights, so the capsule sits level with them.
     var titlebarMidY: CGFloat = 29.75
 
     let config: ConfigStore
     private let system: any PrintSystem
-    private let api: LocalAPI
     private var refresher: Timer?
 
-    init(config: ConfigStore, system: any PrintSystem, api: LocalAPI) {
+    init(config: ConfigStore, system: any PrintSystem) {
         self.config = config
         self.system = system
-        self.api = api
         channels = config.config.channels
         launchAtLogin = config.config.launchAtLogin
         refresh()
@@ -42,7 +38,6 @@ final class AppModel {
     func refresh() {
         printers = system.printers().inListOrder()
         channels = config.config.channels
-        linked = api.isLinked()
     }
 
     /// Polls CUPS while the window is open; the menu bar needs no printer state.

@@ -1,6 +1,5 @@
 import AppKit
 import CUPS
-import PDFKit
 
 public struct PrintJob: @unchecked Sendable {
     public let channel: Channel
@@ -42,7 +41,7 @@ public protocol PrintSystem: Sendable {
     func print(_ job: PrintJob, on printer: Printer) throws(PrintFailure)
 }
 
-/// Printing through CUPS: raw ZPL for ZPL label printers, PDFKit through the driver for everything else.
+/// Printing through CUPS: raw ZPL for ZPL label printers, an AppKit print job through the driver for everything else.
 public struct SystemPrinting: PrintSystem {
     /// When set, driver jobs are written to PDF files in this directory and ZPL jobs to `.zpl` files, instead of printing.
     public let saveDirectory: URL?
@@ -57,7 +56,7 @@ public struct SystemPrinting: PrintSystem {
 
     public func print(_ job: PrintJob, on printer: Printer) throws(PrintFailure) {
         if job.channel == .label, printer.language == .zpl {
-            let zpl = ZPL.job(pages: job.pages.map { LabelLayout.bitmap($0, dpi: printer.dpi) }, copies: job.copies)
+            let zpl = ZPL.job(pages: job.pages.map { PageLayout.labelBitmap($0, dpi: printer.dpi) }, copies: job.copies)
             try sendRaw(Data(zpl.utf8), to: printer, title: job.title)
         } else {
             let result = DispatchQueue.main.sync {
@@ -100,22 +99,27 @@ public struct SystemPrinting: PrintSystem {
 
     @MainActor
     private func printWithDriver(_ job: PrintJob, on printer: Printer) throws(PrintFailure) {
-        guard let document = PDFDocument(data: job.pdf) else { throw PrintFailure("The PDF cannot be opened.") }
-        if job.channel == .label {
-            for index in 0 ..< document.pageCount {
-                guard let page = document.page(at: index) else { continue }
-                let box = page.bounds(for: .cropBox)
-                let landscape = page.rotation % 180 == 0 ? box.width > box.height : box.height > box.width
-                if landscape { page.rotation = (page.rotation + 90) % 360 }
-            }
-        }
         let info = try printInfo(for: printer, channel: job.channel, copies: job.copies)
+        info.orientation = .portrait
+        let paper = CGRect(origin: .zero, size: info.paperSize)
+        let printable = info.imageablePageBounds
+        // AppKit lays each page out inside the margins, so the margins are the printable area's and every page is
+        // drawn relative to its corner.
+        info.leftMargin = printable.minX
+        info.bottomMargin = printable.minY
+        info.rightMargin = paper.maxX - printable.maxX
+        info.topMargin = paper.maxY - printable.maxY
+        info.horizontalPagination = .clip
+        info.verticalPagination = .clip
+        info.isHorizontallyCentered = false
+        info.isVerticallyCentered = false
         if let saveDirectory {
             info.jobDisposition = .save
             info.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = saveDirectory.appending(path: "\(job.title).pdf")
         }
-        guard let operation = document.printOperation(for: info, scalingMode: .pageScaleToFit, autoRotate: job.channel == .document)
-        else { throw PrintFailure("\(printer.name) cannot print this PDF.") }
+        let target = (job.channel == .label ? paper : printable).offsetBy(dx: -printable.minX, dy: -printable.minY)
+        let view = SheetsView(pages: job.pages, channel: job.channel, sheet: paper.size, page: printable.size, target: target)
+        let operation = NSPrintOperation(view: view, printInfo: info)
         operation.showsPrintPanel = false
         operation.showsProgressPanel = false
         operation.jobTitle = job.title
@@ -126,7 +130,7 @@ public struct SystemPrinting: PrintSystem {
     /// smallest margins, so the page fits the whole label), Letter for documents (the variant with the largest
     /// margins, so borderless modes are not picked).
     @MainActor
-    private func printInfo(for printer: Printer, channel: Channel, copies: Int) throws(PrintFailure) -> NSPrintInfo {
+    func printInfo(for printer: Printer, channel: Channel, copies: Int) throws(PrintFailure) -> NSPrintInfo {
         guard let pmPrinter = PMPrinterCreateFromPrinterID(printer.id as CFString) else {
             throw PrintFailure("\(printer.name) is not installed.")
         }
@@ -181,5 +185,48 @@ public struct SystemPrinting: PrintSystem {
         PMSetCopies(OpaquePointer(info.pmPrintSettings()), UInt32(copies), false)
         info.updateFromPMPrintSettings()
         return info
+    }
+}
+
+/// One printable area per PDF page, stacked top to bottom, each page placed by `PageLayout`.
+private final class SheetsView: NSView {
+    private let pages: [CGPDFPage]
+    private let channel: Channel
+    private let sheet: CGSize
+    private let page: CGSize
+    private let target: CGRect
+
+    init(pages: [CGPDFPage], channel: Channel, sheet: CGSize, page: CGSize, target: CGRect) {
+        self.pages = pages
+        self.channel = channel
+        self.sheet = sheet
+        self.page = page
+        self.target = target
+        super.init(frame: NSRect(x: 0, y: 0, width: page.width, height: page.height * CGFloat(pages.count)))
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("not used from a coder")
+    }
+
+    override func knowsPageRange(_ range: NSRangePointer) -> Bool {
+        range.pointee = NSRange(location: 1, length: pages.count)
+        return true
+    }
+
+    override func rectForPage(_ number: Int) -> NSRect {
+        NSRect(x: 0, y: CGFloat(pages.count - number) * page.height, width: page.width, height: page.height)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let context = NSGraphicsContext.current?.cgContext, let number = NSPrintOperation.current?.currentPage else { return }
+        let pdfPage = pages[number - 1]
+        let size = PageLayout.displaySize(of: pdfPage)
+        let turn = channel == .label ? PageLayout.labelTurn(for: size) : PageLayout.documentTurn(for: size, on: sheet)
+        let origin = rectForPage(number).origin
+        context.saveGState()
+        context.clip(to: rectForPage(number))
+        PageLayout.draw(pdfPage, in: context, target: target.offsetBy(dx: origin.x, dy: origin.y), turn: turn)
+        context.restoreGState()
     }
 }

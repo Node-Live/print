@@ -1,0 +1,9 @@
+{
+  "name": "a row of only F is a single bang",
+  "dpi": 203,
+  "width": 32, "length": 1,
+  "rows": [
+    "FFFFFFFF"
+  ],
+  "data": "!"
+}

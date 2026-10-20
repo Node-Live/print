@@ -53,8 +53,7 @@ public sealed partial class MainWindow : Window
         DocumentSection.Chosen += Refresh;
         Root.Loaded += (_, _) =>
         {
-            // The client area only reaches the top edge once the extended title bar is in effect, so size it now.
-            PlaceOnScreen();
+            FitContent();
             Shadows.Attach(PillShadow, PillShape, blur: 22, offsetY: 4, opacity: 0.11f);
             SetDragRegion();
             Root.XamlRoot.Changed += (_, _) => SetDragRegion();
@@ -112,10 +111,27 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>Corrects the window so the content is exactly the design's size; the client size asked for before the
+    /// title bar was extended still counts the system caption.</summary>
+    private void FitContent()
+    {
+        var content = Root.XamlRoot.Size;
+        double scale = Root.XamlRoot.RasterizationScale;
+        AppWindow.Resize(new SizeInt32(
+            AppWindow.Size.Width + (int)Math.Round((ContentWidth - content.Width) * scale),
+            AppWindow.Size.Height + (int)Math.Round((ContentHeight - content.Height) * scale)));
+        Center();
+    }
+
     private void PlaceOnScreen()
     {
         double scale = WindowChrome.Scale(Handle);
         AppWindow.ResizeClient(new SizeInt32((int)Math.Round(ContentWidth * scale), (int)Math.Round(ContentHeight * scale)));
+        Center();
+    }
+
+    private void Center()
+    {
         var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
         AppWindow.Move(new PointInt32(
             area.X + (area.Width - AppWindow.Size.Width) / 2,

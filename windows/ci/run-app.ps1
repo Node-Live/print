@@ -147,6 +147,14 @@ $preflight = Invoke-WebRequest -Method Options -Uri "$api/print?channel=label" -
 "preflight -> $($preflight.StatusCode) $($preflight.Headers['Access-Control-Allow-Origin']) $($preflight.Headers['Access-Control-Allow-Private-Network'])"
 if ($preflight.StatusCode -ne 204) { $failures.Add('preflight failed') }
 
+# A second launch hands over to the running copy and exits.
+$second = Start-Process $App -PassThru
+if ($second.WaitForExit(20000)) { "second instance exited with $($second.ExitCode); first still running: $(-not $process.HasExited)" }
+else { $failures.Add('a second instance kept running'); Stop-Process -Id $second.Id }
+$run = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'NODE Print' -ErrorAction SilentlyContinue
+"launch at login entry with launchAtLogin=false: $($null -ne $run)"
+if ($run) { $failures.Add('Run key written although launchAtLogin is false') }
+
 Stop-Process -Id $process.Id
 
 # The other card states: a chosen printer that is gone, and nothing chosen.
@@ -163,19 +171,5 @@ if ($window -ne [IntPtr]::Zero) {
     Save-Screen $rect.Left $rect.Top ($rect.Right - $rect.Left) ($rect.Bottom - $rect.Top) (Join-Path $Out 'states.png')
 }
 Stop-Process -Id $process.Id
-
-# Candidate Segoe Fluent Icons glyphs, drawn by the system font.
-$glyphs = 'E8A5', 'F000', 'F571', 'F56D', 'F28B', 'F0E3', 'EC5B', 'E9A4', 'F2C7', 'E8EC', 'E70D', 'E73E'
-$strip = New-Object System.Drawing.Bitmap (80 * $glyphs.Count), 90
-$graphics = [System.Drawing.Graphics]::FromImage($strip)
-$graphics.Clear([System.Drawing.Color]::White)
-$graphics.TextRenderingHint = 'AntiAliasGridFit'
-$font = New-Object System.Drawing.Font 'Segoe Fluent Icons', 28, ([System.Drawing.GraphicsUnit]::Pixel)
-$label = New-Object System.Drawing.Font 'Segoe UI', 11, ([System.Drawing.GraphicsUnit]::Pixel)
-for ($i = 0; $i -lt $glyphs.Count; $i++) {
-    $graphics.DrawString([string][char][Convert]::ToInt32($glyphs[$i], 16), $font, [System.Drawing.Brushes]::Black, (80 * $i + 20), 10)
-    $graphics.DrawString($glyphs[$i], $label, [System.Drawing.Brushes]::Gray, (80 * $i + 22), 66)
-}
-$strip.Save((Join-Path $Out 'glyphs.png'))
 
 if ($failures.Count -gt 0) { throw ($failures -join '; ') }

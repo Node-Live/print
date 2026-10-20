@@ -30,7 +30,7 @@ public sealed partial class ChannelSection : UserControl
         bool label = channel == Channel.Label;
         TitleText.Text = Strings.Get(label ? "LabelPrinter" : "DocumentPrinter");
         DetailText.Text = Strings.Get(label ? "LabelPrinterDetail" : "DocumentPrinterDetail");
-        TileIcon.Glyph = label ? "\uE8EC" : "\uE8A5";
+        TileIcon.Glyph = label ? "\uE8EC" : "\uF000";
     }
 
     public void Show(ChannelStatus status)
@@ -112,7 +112,7 @@ public sealed partial class ChannelSection : UserControl
             grid.Children.Add(new FontIcon
             {
                 Glyph = "\uE73E",
-                FontFamily = (FontFamily)resources["IconFont"],
+                FontFamily = TileIcon.FontFamily,
                 FontSize = 12,
                 Foreground = (Brush)resources["InkBrush"],
             });

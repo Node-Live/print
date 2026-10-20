@@ -165,9 +165,6 @@ struct PrinterCard: View {
                     .foregroundStyle(Theme.secondary)
                     .frame(width: 20, height: 20)
                     .padding(.trailing, 12)
-                    .popover(isPresented: $choosing, arrowEdge: .bottom) {
-                        PrinterList(channel: channel, model: model) { choosing = false }
-                    }
             }
             .frame(height: 60)
             .frame(maxWidth: .infinity)
@@ -175,6 +172,11 @@ struct PrinterCard: View {
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
+        // Hangs from the whole card, as wide as it, so the list stays inside the window under the printer it replaces.
+        .popover(isPresented: $choosing, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
+            PrinterList(channel: channel, model: model) { choosing = false }
+                .frame(width: Theme.cardWidth)
+        }
         .onChange(of: choosing) { if choosing { model.refresh() } }
     }
 }
@@ -244,7 +246,7 @@ struct PrinterList: View {
             }
         }
         .padding(6)
-        .frame(width: 300, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

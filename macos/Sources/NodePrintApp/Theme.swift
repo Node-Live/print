@@ -3,6 +3,7 @@ import SwiftUI
 enum Theme {
     static let windowSize = CGSize(width: 522, height: 374)
     static let inset: CGFloat = 21
+    static let cardWidth = windowSize.width - 2 * inset
 
     static let ink = Color(hex: 0x101014)
     static let secondary = Color(hex: 0x85858D)

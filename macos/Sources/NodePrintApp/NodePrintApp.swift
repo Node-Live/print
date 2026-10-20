@@ -97,14 +97,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return false
     }
 
-    /// `--style native` opens the window in SwiftUI's default styles instead of the design's.
-    private let native = CommandLine.arguments.firstIndex(of: "--style").map {
-        CommandLine.arguments.indices.contains($0 + 1) && CommandLine.arguments[$0 + 1] == "native"
-    } ?? false
-
     func showWindow() {
         guard let model else { return }
-        let window = window ?? (native ? makeNativeWindow(model) : makeWindow(model))
+        let window = window ?? makeWindow(model)
         self.window = window
         model.watch(true)
         NSApp.activate(ignoringOtherApps: true)
@@ -118,7 +113,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// AppKit grows the window when it lays out the toolbar on some systems; the window has one size.
     func windowDidResize(_ notification: Notification) {
-        guard !native, !fixingSize, let window = notification.object as? NSWindow, window.frame.size != Theme.windowSize else { return }
+        guard !fixingSize, let window = notification.object as? NSWindow, window.frame.size != Theme.windowSize else { return }
         fixingSize = true
         defer { fixingSize = false }
         var frame = window.frame
@@ -131,22 +126,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func alignCapsule(in window: NSWindow) {
-        guard !native, let close = window.standardWindowButton(.closeButton) else { return }
+        guard let close = window.standardWindowButton(.closeButton) else { return }
         window.layoutIfNeeded()
         model?.titlebarMidY = window.frame.height - close.convert(close.bounds, to: nil).midY
-    }
-
-    private func makeNativeWindow(_ model: AppModel) -> NSWindow {
-        let content = NSHostingController(rootView: NativeView(model: model))
-        content.sizingOptions = .preferredContentSize
-        let window = NSWindow(contentViewController: content)
-        window.title = "NODE Print"
-        window.styleMask = [.titled, .closable, .miniaturizable]
-        window.collectionBehavior = [.fullScreenNone]
-        window.isReleasedWhenClosed = false
-        window.delegate = self
-        window.center()
-        return window
     }
 
     private func makeWindow(_ model: AppModel) -> NSWindow {

@@ -1,16 +1,26 @@
 # Labels on ZPL printers
 
+**Parked: not part of v1.** Labels reach Zebra printers through their driver like any other printer. This
+is the design for a later version, kept so the vectors in `testdata/zpl/` and the thinking are not lost.
+
 Zebra label printers (the warehouses mostly run them; the test unit is a GX420d) take ZPL, their own command
-language, straight from the host. NODE Print sends ZPL to them instead of going through the driver's paper
-settings, so a label comes out at the printer's own dots with nothing scaled, dithered or cut off by a
+language, straight from the host. NODE Print would send ZPL to them instead of going through the driver's
+paper settings, so a label comes out at the printer's own dots with nothing scaled, dithered or cut off by a
 mis-set driver. Both apps implement this the same way; `testdata/zpl/` holds vectors they must both pass.
+
+Known gaps to close before this ships: a `^GF` field holds at most 99,999 bytes, so a 4 × 6 bitmap must be
+cut into horizontal strips of `floor(99999 / bytesPerRow)` rows, each its own `^FO0,<y>^GFA…^FS` with the
+row-repeat `:` never crossing a strip; the job should pin `^PON^PMN^LRN` so a previous job's orientation,
+mirror or reverse setting cannot leak in; and a queue is only ZPL on explicit evidence (`CMD:…ZPL…` in the
+1284 id or a ZPL driver), never on the Zebra name alone.
 
 ## Which queues count as ZPL
 
-- Windows: the driver name starts with `ZDesigner` and does not contain `(EPL)`; or the driver name contains
-  `ZPL`.
+- Windows: the driver name starts with `ZDesigner` and does not contain `(EPL)` or `(CPCL)`; or the driver
+  name contains `ZPL`.
 - macOS: the queue's PPD / IPP make-and-model contains `Zebra` or `ZPL`, or its IEEE 1284 device id has
-  `CMD:` containing `ZPL`. EPL-only queues (`EPL` without `ZPL`) are not ZPL.
+  `CMD:` containing `ZPL`. A queue whose name or make-and-model says `EPL` or `CPCL` without `ZPL` (such as
+  the built-in "Zebra CPCL Label Printer" driver) is not ZPL.
 
 Everything else prints through the OS driver.
 
@@ -100,3 +110,7 @@ digit and repeated rows; every ZPL II printer accepts it. Encode each row left t
 `rows` are the packed rows in hex (test-sized bitmaps, so `width`/`length` here are the bitmap's, not a 4 × 6
 label); `data` is the exact compressed field. Both apps must produce `data` from `rows` byte for byte, and
 the job text around it as in the template above with the vector's `width`/`length`/`bytesPerRow`.
+
+`testdata/zpl/*.pdf` are 4 × 6 pages (blank, a black border, a landscape page with a corner mark) with a
+vector of the same name: rendering the PDF at the vector's `dpi` by the steps above must give exactly the
+vector's `rows`. The landscape one pins the rotation direction.

@@ -53,7 +53,9 @@ public sealed partial class MainWindow : Window
         DocumentSection.Chosen += Refresh;
         Root.Loaded += (_, _) =>
         {
-            Shadows.Attach(PillShadow, PillShape, blur: 16, offsetY: 3, opacity: 0.10f);
+            // The client area only reaches the top edge once the extended title bar is in effect, so size it now.
+            PlaceOnScreen();
+            Shadows.Attach(PillShadow, PillShape, blur: 22, offsetY: 4, opacity: 0.11f);
             SetDragRegion();
             Root.XamlRoot.Changed += (_, _) => SetDragRegion();
         };

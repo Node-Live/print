@@ -110,8 +110,10 @@ foreach ($point in @(@(100, 20, 'drag strip'), @(497, 16, 'close button'), @(260
 [Screen]::SetCursorPos($rect.Left + 1 + [int](260 * $scale), $rect.Top + 1 + [int](122 * $scale)) | Out-Null
 Start-Sleep -Milliseconds 300
 [Screen]::mouse_event(0x2, 0, 0, 0, [IntPtr]::Zero); [Screen]::mouse_event(0x4, 0, 0, 0, [IntPtr]::Zero)
-Start-Sleep -Seconds 2
+Start-Sleep -Seconds 4
 Save-Screen $rect.Left $rect.Top $width ([Math]::Min($height + 300, 768 - $rect.Top)) (Join-Path $Out 'printer-list.png')
+"printers while the list is open: $((Invoke-RestMethod "$api/printers").printers.Count)"
+Get-Content (Join-Path $configDir 'error.log') -ErrorAction SilentlyContinue
 [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
 
 function Get-PdfPages([string] $path) {
@@ -163,7 +165,7 @@ if ($window -ne [IntPtr]::Zero) {
 Stop-Process -Id $process.Id
 
 # Candidate Segoe Fluent Icons glyphs, drawn by the system font.
-$glyphs = 'E8A5', 'E7C3', 'E9F9', 'F106', 'EFDA', 'E8E5', 'E9A4', 'E8EC', 'E70D', 'E96E', 'E972', 'E921', 'E8BB', 'E73E'
+$glyphs = 'E8A5', 'F000', 'F571', 'F56D', 'F28B', 'F0E3', 'EC5B', 'E9A4', 'F2C7', 'E8EC', 'E70D', 'E73E'
 $strip = New-Object System.Drawing.Bitmap (80 * $glyphs.Count), 90
 $graphics = [System.Drawing.Graphics]::FromImage($strip)
 $graphics.Clear([System.Drawing.Color]::White)

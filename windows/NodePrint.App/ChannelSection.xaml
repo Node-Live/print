@@ -38,12 +38,13 @@
             Style="{StaticResource CardButtonStyle}"
             Height="60"
             Margin="0,24,0,0"
-            VerticalAlignment="Top">
-            <Button.Flyout>
-                <Flyout x:Name="Picker" Placement="BottomEdgeAlignedRight" ShouldConstrainToRootBounds="False" Opening="OnPickerOpening">
+            VerticalAlignment="Top"
+            Click="OnCardClick">
+            <FlyoutBase.AttachedFlyout>
+                <Flyout x:Name="Picker" Placement="BottomEdgeAlignedRight" ShouldConstrainToRootBounds="False">
                     <StackPanel x:Name="PickerList" Width="340" Spacing="2" />
                 </Flyout>
-            </Button.Flyout>
+            </FlyoutBase.AttachedFlyout>
             <Grid>
                 <Grid Width="38" Height="38" Margin="11,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center">
                     <Canvas x:Name="TileShadow" />

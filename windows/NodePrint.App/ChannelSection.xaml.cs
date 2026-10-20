@@ -1,6 +1,7 @@
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using NodePrint.Core;
@@ -16,7 +17,7 @@ public sealed partial class ChannelSection : UserControl
     public ChannelSection()
     {
         InitializeComponent();
-        Loaded += (_, _) => Shadows.Attach(TileShadow, TileShape, blur: 2, offsetY: 1, opacity: 0.08f);
+        Loaded += (_, _) => Shadows.Attach(TileShadow, TileShape, blur: 3, offsetY: 1, opacity: 0.05f);
     }
 
     /// <summary>Raised after the user picked a printer from the list.</summary>
@@ -66,26 +67,34 @@ public sealed partial class ChannelSection : UserControl
         _ => paper,
     };
 
-    private async void OnPickerOpening(object sender, object e)
+    /// <summary>Fills the list first and then opens it: a popup that may leave the window is sized when it opens.</summary>
+    private async void OnCardClick(object sender, RoutedEventArgs e)
     {
         if (service is null) return;
         PickerList.Children.Clear();
-        var printers = await Task.Run(service.Printers);
-        string? chosen = service.ChosenId(channel);
-        if (printers.Count == 0)
+        try
         {
-            PickerList.Children.Add(new TextBlock
+            var printers = await Task.Run(service.Printers);
+            string? chosen = service.ChosenId(channel);
+            if (printers.Count == 0)
             {
-                Text = Strings.Get("NoPrinters"),
-                Margin = new Thickness(10, 8, 10, 8),
-                FontSize = 13,
-                Foreground = (Brush)Application.Current.Resources["SecondaryInkBrush"],
-            });
-            return;
+                PickerList.Children.Add(new TextBlock
+                {
+                    Text = Strings.Get("NoPrinters"),
+                    Margin = new Thickness(10, 8, 10, 8),
+                    FontSize = 13,
+                    Foreground = (Brush)Application.Current.Resources["SecondaryInkBrush"],
+                });
+            }
+            foreach (var printer in printers)
+            {
+                PickerList.Children.Add(Row(printer, printer.Id == chosen));
+            }
+            FlyoutBase.ShowAttachedFlyout(Card);
         }
-        foreach (var printer in printers)
+        catch (Exception error)
         {
-            PickerList.Children.Add(Row(printer, printer.Id == chosen));
+            ErrorLog.Write(error);
         }
     }
 

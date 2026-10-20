@@ -12,7 +12,7 @@ namespace NodePrint.App;
 public sealed partial class NativeWindow : Window
 {
     private const int ContentWidth = 520;
-    private const int ContentHeight = 470;
+    private const int ContentHeight = 430;
 
     private readonly PrintService service;
     private readonly Func<bool> portInUse;

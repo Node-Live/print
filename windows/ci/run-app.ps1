@@ -186,7 +186,7 @@ foreach ($style in 'design', 'native') {
             $window = Find-Window $process
             Save-Window $window "$style-$($state[0])"
             if ($style -eq 'native' -and $state[0] -eq 'main-window') {
-                Invoke-Click $window 260 160
+                Invoke-Click $window 260 125
                 Start-Sleep -Seconds 2
                 Save-Window $window 'native-printer-list' 200
                 [System.Windows.Forms.SendKeys]::SendWait('{ESC}')

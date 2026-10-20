@@ -21,6 +21,7 @@
     <WindowsAppSdkIncludeVersionInfo>true</WindowsAppSdkIncludeVersionInfo>
     <SelfContained>true</SelfContained>
     <PublishAot>true</PublishAot>
+    <OptimizationPreference>Size</OptimizationPreference>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <DefaultLanguage>en-US</DefaultLanguage>
     <SatelliteResourceLanguages>en-US;zh-CN;es-ES</SatelliteResourceLanguages>
@@ -30,7 +31,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <!-- The components of Windows App SDK 2.5.1 the app uses; the full package also brings its AI and ML parts, whose
+         onnxruntime and DirectML get copied next to the app even when the runtime is not carried. -->
+    <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" Version="2.5.1" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.3.9" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" Version="2.3.12" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="2.1.9" />
     <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.366" PrivateAssets="all" />
     <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
@@ -44,10 +50,15 @@
     <Content Include="Assets\NodePrint.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <!-- Symbols stay with the build; the installer carries only what runs. -->
-  <Target Name="LeaveSymbolsOutOfPublish" AfterTargets="ComputeResolvedFilesToPublishList">
+  <!-- The installer carries only what runs: no symbols, and none of the pieces packages drop in for features the app
+       does not use (WebView2, the IIS module of ASP.NET Core, Windows App SDK background tasks). -->
+  <PropertyGroup>
+    <UnusedPublishFiles>;Microsoft.Web.WebView2.Core.dll;WebView2Loader.dll;aspnetcorev2_inprocess.dll;Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.dll;</UnusedPublishFiles>
+  </PropertyGroup>
+  <Target Name="LeaveUnusedOutOfPublish" AfterTargets="ComputeResolvedFilesToPublishList">
     <ItemGroup>
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.pdb'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$(UnusedPublishFiles.Contains(';%(Filename)%(Extension);'))" />
     </ItemGroup>
   </Target>
 

@@ -17,4 +17,5 @@ NODE Print 是 NODE 的桌面打印客户端，Windows 与 macOS 各一套原生
 ## 提交与分支
 - 英文 Conventional Commits（`feat(windows): …`、`fix(macos): …`、`docs: …`），每完成一小步就提交。
 - 只推自己的分支（`feat/windows`、`feat/macos`）；`main` 只由 main 合并。
+- 推 `v<版本>` 标签就是发版（`.github/workflows/release.yml`），只由 main 做；见 `README.md` 的 Releases。
 - 不在 worktree 里用 `git stash`；不用 `pkill -f`。

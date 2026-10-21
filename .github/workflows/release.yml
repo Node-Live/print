@@ -1,0 +1,86 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: release-${{ github.ref }}
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # v1.2.3 releases 1.2.3; v1.2.3-anything is a prerelease of it, which never becomes "latest".
+      - name: The tag names the version both apps carry
+        id: version
+        run: |
+          tag=${GITHUB_REF_NAME#v}
+          version=${tag%%-*}
+          macos=$(sed -n 's/.*static let version = "\(.*\)".*/\1/p' macos/Sources/NodePrintCore/Version.swift)
+          windows=$(sed -n 's/.*<Version>\(.*\)<\/Version>.*/\1/p' windows/Directory.Build.props)
+          echo "tag $GITHUB_REF_NAME, macOS $macos, Windows $windows"
+          if [ "$macos" != "$version" ] || [ "$windows" != "$version" ]; then
+            echo "::error::the tag says $version, macOS carries $macos and Windows $windows"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$([ "$tag" = "$version" ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
+
+  macos:
+    needs: version
+    uses: ./.github/workflows/macos.yml
+
+  windows:
+    needs: version
+    uses: ./.github/workflows/windows.yml
+
+  # One release with every file, so "latest" never points at a half-uploaded version.
+  publish:
+    needs: [version, macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.version.outputs.version }}
+      PRERELEASE: ${{ needs.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: NODE-Print-${{ env.VERSION }}-macos
+          path: dist/macos
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: NodePrint-windows-${{ env.VERSION }}
+          path: dist/windows
+
+      # The web links releases/latest/download/<file>, so these names must not change.
+      - name: Release
+        run: |
+          files=(
+            dist/macos/NODE-Print-macos.dmg
+            dist/macos/NODE-Print-macos.zip
+            dist/windows/NodePrint-win-Setup.exe
+            dist/windows/NodePrint-win-Portable.zip
+            "dist/windows/NodePrint-$VERSION-full.nupkg"
+            dist/windows/releases.win.json
+          )
+          ls -l "${files[@]}"
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber
+            exit 0
+          fi
+          flags=()
+          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+          notes=$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")
+          if [ -n "$notes" ]; then flags+=(--notes "$notes"); else flags+=(--generate-notes); fi
+          gh release create "$GITHUB_REF_NAME" "${files[@]}" --title "NODE Print ${GITHUB_REF_NAME#v}" --verify-tag "${flags[@]}"

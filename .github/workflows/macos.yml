@@ -9,6 +9,7 @@ on:
       - "testdata/**"
       - ".github/workflows/macos.yml"
   workflow_dispatch:
+  workflow_call:
 
 concurrency:
   group: macos-${{ github.ref }}

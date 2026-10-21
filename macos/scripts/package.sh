@@ -50,10 +50,10 @@ else
 fi
 codesign --verify --strict "$app"
 
-ditto -c -k --keepParent "$app" "$dist/NODE-Print-$version-macos.zip"
+ditto -c -k --keepParent "$app" "$dist/NODE-Print-macos.zip"
 staging=$(mktemp -d)
 cp -R "$app" "$staging/"
 ln -s /Applications "$staging/Applications"
-hdiutil create -volname "NODE Print" -srcfolder "$staging" -ov -format UDZO "$dist/NODE-Print-$version-macos.dmg"
+hdiutil create -volname "NODE Print" -srcfolder "$staging" -ov -format UDZO "$dist/NODE-Print-macos.dmg"
 rm -rf "$staging"
 echo "$version"

@@ -4,13 +4,15 @@ using Velopack.Sources;
 
 namespace NodePrint.App;
 
-/// <summary>Velopack, which installed the app, finds, downloads and swaps in new versions from the GitHub releases, or
-/// from the test feed when one is set.</summary>
+/// <summary>Velopack, which installed the app, finds, downloads and swaps in new versions from the latest GitHub
+/// release, or from the test feed when one is set.</summary>
 internal sealed class VelopackUpdater(string? testFeed, Action quit) : IUpdater
 {
-    private readonly UpdateManager manager = new(testFeed is null
-        ? new GithubSource("https://github.com/Node-Live/print", null, prerelease: false)
-        : (IUpdateSource)new SimpleWebSource(testFeed));
+    // The latest release's download links redirect to its files, so they serve as the feed: no GitHub API, no rate
+    // limit, and a prerelease is never "latest".
+    private const string LatestRelease = "https://github.com/Node-Live/print/releases/latest/download";
+
+    private readonly UpdateManager manager = new(new SimpleWebSource(testFeed ?? LatestRelease));
     private UpdateInfo? found;
     private bool notInstalledLogged;
 

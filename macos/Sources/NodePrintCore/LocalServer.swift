@@ -3,18 +3,20 @@ import Network
 import os
 
 /// HTTP/1.1 on 127.0.0.1 only, one request per connection. When the port cannot be bound it says so and tries
-/// again every 5 s.
+/// again every 5 s. A `POST /print` counts in `activity` from its head until its response.
 public final class LocalServer: @unchecked Sendable {
     public static let defaultPort: UInt16 = 19233
 
     private let api: LocalAPI
+    private let activity: Activity
     private let port: UInt16
     private let queue = DispatchQueue(label: "live.node.print.server")
     private var listener: NWListener?
     private var stopped = false
 
-    public init(api: LocalAPI, port: UInt16 = LocalServer.defaultPort) {
+    public init(api: LocalAPI, activity: Activity = Activity(), port: UInt16 = LocalServer.defaultPort) {
         self.api = api
+        self.activity = activity
         self.port = port
     }
 
@@ -49,9 +51,10 @@ public final class LocalServer: @unchecked Sendable {
             }
         }
         let api = api
+        let activity = activity
         let queue = queue
         listener.newConnectionHandler = { connection in
-            HTTPConnection(connection, api: api, queue: queue).start()
+            HTTPConnection(connection, api: api, activity: activity, queue: queue).start()
         }
         listener.start(queue: queue)
     }
@@ -68,12 +71,15 @@ private final class HTTPConnection: @unchecked Sendable {
 
     private let connection: NWConnection
     private let api: LocalAPI
+    private let activity: Activity
     private let queue: DispatchQueue
     private var buffer = Data()
+    private var isJob = false
 
-    init(_ connection: NWConnection, api: LocalAPI, queue: DispatchQueue) {
+    init(_ connection: NWConnection, api: LocalAPI, activity: Activity, queue: DispatchQueue) {
         self.connection = connection
         self.api = api
+        self.activity = activity
         self.queue = queue
     }
 
@@ -95,21 +101,25 @@ private final class HTTPConnection: @unchecked Sendable {
             buffer.removeSubrange(..<end.upperBound)
             return handle(head: head)
         }
-        if buffer.count > Self.maxHeadBytes { return connection.cancel() }
-        receive { [self] ended in ended ? connection.cancel() : readHead() }
+        if buffer.count > Self.maxHeadBytes { return close() }
+        receive { [self] ended in ended ? close() : readHead() }
     }
 
     private func handle(head raw: Data) {
-        guard let text = String(data: raw, encoding: .utf8) else { return connection.cancel() }
+        guard let text = String(data: raw, encoding: .utf8) else { return close() }
         let lines = text.components(separatedBy: "\r\n")
         let requestLine = lines[0].split(separator: " ")
-        guard requestLine.count == 3 else { return connection.cancel() }
+        guard requestLine.count == 3 else { return close() }
         var headers: [String: String] = [:]
         for line in lines.dropFirst() {
             guard let colon = line.firstIndex(of: ":") else { continue }
             headers[line[..<colon].lowercased()] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
         }
         let head = RequestHead(method: String(requestLine[0]), target: String(requestLine[1]), headers: headers)
+        if head.method == "POST", head.path == "/print" {
+            isJob = true
+            activity.jobArrived()
+        }
         let chunked = headers["transfer-encoding"]?.lowercased().contains("chunked") == true
         let length = chunked ? nil : max(0, Int(headers["content-length"] ?? "") ?? 0)
 
@@ -128,7 +138,7 @@ private final class HTTPConnection: @unchecked Sendable {
 
     private func readBody(_ head: RequestHead, length: Int) {
         guard buffer.count >= length else {
-            return receive { [self] ended in ended && buffer.count < length ? connection.cancel() : readBody(head, length: length) }
+            return receive { [self] ended in ended && buffer.count < length ? close() : readBody(head, length: length) }
         }
         respond(head, body: Data(buffer.prefix(length)))
     }
@@ -140,7 +150,7 @@ private final class HTTPConnection: @unchecked Sendable {
             let sizeText = String(decoding: buffer[buffer.startIndex ..< lineEnd.lowerBound], as: UTF8.self)
                 .split(separator: ";").first ?? ""
             guard let size = Int(sizeText.trimmingCharacters(in: .whitespaces), radix: 16), size >= 0 else {
-                return connection.cancel()
+                return close()
             }
             if size == 0 { return respond(head, body: body) }
             if body.count + size > LocalAPI.maxBodyBytes {
@@ -152,33 +162,45 @@ private final class HTTPConnection: @unchecked Sendable {
             buffer.removeSubrange(buffer.startIndex ..< dataEnd + 2)
         }
         let sofar = body
-        receive { [self] ended in ended ? connection.cancel() : readChunks(head, body: sofar) }
+        receive { [self] ended in ended ? close() : readChunks(head, body: sofar) }
     }
 
     private func respond(_ head: RequestHead, body: Data) {
         api.respond(to: head, body: body) { response in
-            self.queue.async { self.send(response) { self.connection.cancel() } }
+            self.queue.async { self.send(response) { self.close() } }
         }
     }
 
     /// Reads and drops what is left of a body the response did not need (all of it until the client closes when its
     /// length is unknown), so the client is not reset mid-upload.
     private func drain(_ remaining: Int?) {
-        if let remaining, remaining <= 0 { return connection.cancel() }
+        if let remaining, remaining <= 0 { return close() }
         let before = buffer.count
         receive { [self] ended in
             let read = buffer.count - before
             buffer.removeAll()
-            if ended { return connection.cancel() }
+            if ended { return close() }
             drain(remaining.map { $0 - read })
         }
     }
 
     private func send(_ response: Response, then next: @escaping @Sendable () -> Void) {
+        endJob()
         var head = "HTTP/1.1 \(response.status) \(Self.reason(response.status))\r\n"
         for (name, value) in response.headers { head += "\(name): \(value)\r\n" }
         head += "Content-Length: \(response.body.count)\r\nConnection: close\r\n\r\n"
         connection.send(content: Data(head.utf8) + response.body, completion: .contentProcessed { _ in next() })
+    }
+
+    private func close() {
+        endJob()
+        connection.cancel()
+    }
+
+    private func endJob() {
+        guard isJob else { return }
+        isJob = false
+        activity.jobEnded()
     }
 
     private static func reason(_ status: Int) -> String {

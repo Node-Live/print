@@ -65,6 +65,9 @@ jobs:
       - name: Smoke
         run: ci/smoke.sh "dist/NODE Print.app" ../testdata
 
+      - name: Update
+        run: ci/update.py "dist/NODE Print.app"
+
       - uses: actions/upload-artifact@v4
         with:
           name: NODE-Print-${{ steps.version.outputs.version }}-macos

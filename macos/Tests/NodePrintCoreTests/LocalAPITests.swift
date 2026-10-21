@@ -58,13 +58,15 @@ struct Harness {
     let port: UInt16
     let config: ConfigStore
 
-    static func start(_ system: FakePrinting, channels: Config.Channels = .init(), origins: [String] = []) async throws -> Harness {
+    static func start(
+        _ system: FakePrinting, channels: Config.Channels = .init(), origins: [String] = [], activity: Activity = Activity()
+    ) async throws -> Harness {
         let config = ConfigStore(url: temporaryConfigURL(), firstRun: { [] })
         config.update {
             $0.channels = channels
             $0.allowedOrigins = origins
         }
-        let server = LocalServer(api: LocalAPI(system: system, config: config), port: 0)
+        let server = LocalServer(api: LocalAPI(system: system, config: config), activity: activity, port: 0)
         let port = await withCheckedContinuation { continuation in
             server.start { port in
                 if let port { continuation.resume(returning: port) }
@@ -80,16 +82,17 @@ struct Harness {
         return try await exchange(Data((head + "\r\n").utf8) + body)
     }
 
-    /// Blocking socket work stays off the cooperative pool, which the server itself needs.
-    func exchange(_ request: Data) async throws -> Reply {
+    /// Blocking socket work stays off the cooperative pool, which the server itself needs. `rest` goes out once the
+    /// server has answered 100 Continue, right after `between` ran.
+    func exchange(_ request: Data, rest: Data? = nil, between: @escaping @Sendable () -> Void = {}) async throws -> Reply {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global().async {
-                continuation.resume(with: Result { try blockingExchange(request) })
+                continuation.resume(with: Result { try blockingExchange(request, rest: rest, between: between) })
             }
         }
     }
 
-    private func blockingExchange(_ request: Data) throws -> Reply {
+    private func blockingExchange(_ request: Data, rest: Data?, between: () -> Void) throws -> Reply {
         let socket = Darwin.socket(AF_INET, SOCK_STREAM, 0)
         defer { close(socket) }
         var timeout = timeval(tv_sec: 5, tv_usec: 0)
@@ -104,6 +107,7 @@ struct Harness {
         guard connected == 0 else { throw POSIXError(.ECONNREFUSED) }
         _ = request.withUnsafeBytes { Darwin.send(socket, $0.baseAddress, $0.count, 0) }
 
+        var rest = rest
         var received = Data()
         var chunk = [UInt8](repeating: 0, count: 65536)
         while true {
@@ -113,6 +117,11 @@ struct Harness {
                 let statusLine = lines.removeFirst()
                 if statusLine.hasPrefix("HTTP/1.1 100 ") {
                     received.removeSubrange(..<end.upperBound)
+                    if let body = rest {
+                        between()
+                        _ = body.withUnsafeBytes { Darwin.send(socket, $0.baseAddress, $0.count, 0) }
+                        rest = nil
+                    }
                     continue
                 }
                 var headers: [String: String] = [:]

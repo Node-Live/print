@@ -81,6 +81,6 @@ jobs:
           fi
           flags=()
           if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
-          notes=$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")
+          notes=$(git tag -l --format='%(contents:subject)%0a%0a%(contents:body)' "$GITHUB_REF_NAME")
           if [ -n "$notes" ]; then flags+=(--notes "$notes"); else flags+=(--generate-notes); fi
           gh release create "$GITHUB_REF_NAME" "${files[@]}" --title "NODE Print ${GITHUB_REF_NAME#v}" --verify-tag "${flags[@]}"

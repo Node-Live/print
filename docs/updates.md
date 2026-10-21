@@ -31,12 +31,16 @@ both, and each app updates from the files of its own platform (see the top-level
 ## Windows
 
 Velopack, which already installs the app, does the update. `UpdateManager` on
-`GithubSource("https://github.com/Node-Live/print")`, prereleases off: `CheckForUpdatesAsync` is the check,
+`SimpleWebSource("https://github.com/Node-Live/print/releases/latest/download")`: the latest release's download
+links redirect to its files, so `releases.win.json` and the packages are read from there with no GitHub API
+call, no rate limit, and no prerelease (a prerelease is never "latest"). `CheckForUpdatesAsync` is the check,
 `DownloadUpdatesAsync` the download (a delta when the release has one, else the full package),
-`ApplyUpdatesAndRestart(update, ["--tray"])` the swap. It exits the app, lets `Update.exe` replace `current\`
-and start the new version, which takes the `Global\NODE Print` mutex only once the old process is gone. A
-download kept from an earlier tick is found through `UpdatePendingRestart`. The Run key points at
-`current\NodePrint.exe`, which an update leaves where it is.
+`WaitExitThenApplyUpdates(update, silent: true, restart: true, ["--tray"])` followed by the app's own quit
+(server stopped, tray icon gone) is the swap: `Update.exe` waits for the process to exit, replaces `current\`
+without a window of its own and starts the new version, which takes the `Global\NODE Print` mutex only once
+the old process is gone. Velopack's apply-on-launch is off (`SetAutoApplyOnStartup(false)`): a download kept
+from an earlier tick is found through `UpdatePendingRestart` and applied by the scheduler, never by a launch.
+The Run key points at `current\NodePrint.exe`, which an update leaves where it is.
 
 Build: `PublishAot` stays free of trimming warnings from `UpdateManager`. The release carries
 `releases.win.json`, `NodePrint-<version>-full.nupkg` and, when the CI had the previous release to diff

@@ -49,11 +49,11 @@ internal sealed class TestHost : IAsyncDisposable
     public HttpClient Client { get; }
     public PrintService Service { get; }
 
-    public static async Task<TestHost> StartAsync(FakeBackend backend, AppConfig? config = null)
+    public static async Task<TestHost> StartAsync(FakeBackend backend, AppConfig? config = null, TimeProvider? clock = null)
     {
         var directory = Directory.CreateTempSubdirectory("nodeprint-");
         var store = new ConfigStore(Path.Combine(directory.FullName, "config.json"));
-        var service = new PrintService(backend, store, config ?? new AppConfig());
+        var service = new PrintService(backend, store, config ?? new AppConfig(), clock);
         var builder = WebApplication.CreateEmptyBuilder(new WebApplicationOptions());
         builder.WebHost.UseTestServer();
         var app = builder.Build();

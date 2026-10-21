@@ -15,18 +15,26 @@ public interface IPrintBackend
 
 public sealed class PrintService
 {
+    /// <summary>How long after the last job ended the app counts as idle again.</summary>
+    public static readonly TimeSpan IdleAfter = TimeSpan.FromMinutes(5);
+
     private readonly IPrintBackend backend;
     private readonly ConfigStore store;
+    private readonly TimeProvider clock;
     private readonly Lock gate = new();
+    private readonly Lock jobsGate = new();
     private readonly SerialQueue labelQueue = new();
     private readonly SerialQueue documentQueue = new();
     private AppConfig config;
+    private int jobsInFlight;
+    private DateTimeOffset? lastJobEnded;
 
-    public PrintService(IPrintBackend backend, ConfigStore store, AppConfig config)
+    public PrintService(IPrintBackend backend, ConfigStore store, AppConfig config, TimeProvider? clock = null)
     {
         this.backend = backend;
         this.store = store;
         this.config = config;
+        this.clock = clock ?? TimeProvider.System;
     }
 
     /// <summary>Loads the config file, or on first run picks the printers and writes it. A file that does not parse is
@@ -129,6 +137,21 @@ public sealed class PrintService
         return new JobInfo(channel, printer.Name, pages, copies);
     }
 
+    /// <summary>Counts a print request as a job, on either channel, until the returned handle is disposed once its
+    /// response has been sent.</summary>
+    public IDisposable JobArrived()
+    {
+        lock (jobsGate) jobsInFlight++;
+        return new Job(this);
+    }
+
+    /// <summary>No job in flight and the last one ended at least <see cref="IdleAfter"/> ago; no job since the app
+    /// started counts as idle.</summary>
+    public bool IsIdle(DateTimeOffset now)
+    {
+        lock (jobsGate) return jobsInFlight == 0 && (lastJobEnded is not { } ended || now - ended >= IdleAfter);
+    }
+
     private static ChannelState ToChannelState(PrinterState state) => state switch
     {
         PrinterState.Busy => ChannelState.Busy,
@@ -146,6 +169,18 @@ public sealed class PrintService
             change(next);
             store.Save(next);
             config = next;
+        }
+    }
+
+    private sealed class Job(PrintService service) : IDisposable
+    {
+        public void Dispose()
+        {
+            lock (service.jobsGate)
+            {
+                service.jobsInFlight--;
+                service.lastJobEnded = service.clock.GetUtcNow();
+            }
         }
     }
 }

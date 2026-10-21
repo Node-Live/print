@@ -37,6 +37,7 @@ public partial class App : Application
         tray.QuitRequested += Quit;
 
         _ = ServeAsync(service);
+        StartUpdates(service);
         if (!Environment.GetCommandLineArgs().Contains(LaunchAtLogin.TrayArgument)) BringToFront();
     }
 
@@ -72,6 +73,15 @@ public partial class App : Application
                 return;
             }
         }
+    }
+
+    private void StartUpdates(PrintService service)
+    {
+        string? testFeed = Environment.GetEnvironmentVariable(UpdateScheduler.TestFeedVariable) is { Length: > 0 } feed ? feed : null;
+        var dispatcher = window!.DispatcherQueue;
+        var updater = new VelopackUpdater(testFeed, () => dispatcher.TryEnqueue(Quit));
+        var scheduler = new UpdateScheduler(updater, service, ErrorLog.Write, TimeProvider.System, fromTestFeed: testFeed is not null);
+        _ = Task.Run(() => scheduler.RunAsync());
     }
 
     private async void Quit()

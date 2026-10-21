@@ -139,7 +139,7 @@ def main():
         expect(version(installed) == VERSION, f"the bundle in place is not {VERSION}")
         expect(not os.path.exists(staging), "the new version left the staging folder")
         with open(log) as file:
-            expect(any(line.endswith(" downloaded and applied " + VERSION) for line in file), "update.log has no applied line")
+            expect(any(line.endswith(" downloaded and applied " + VERSION) for line in file.read().splitlines()), "update.log has no applied line")
         print("the update chain went through", flush=True)
     finally:
         if os.path.exists(log):

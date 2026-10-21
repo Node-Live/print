@@ -42,6 +42,7 @@ public static class LocalApi
     {
         var request = context.Request;
         var response = context.Response;
+        using var job = request.Path.Value == "/print" && HttpMethods.IsPost(request.Method) ? service.JobArrived() : null;
         string origin = request.Headers.Origin.ToString();
         bool fromNode = origin.Length > 0 && IsAllowedOrigin(origin, service.AllowedOrigins);
         try

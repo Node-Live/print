@@ -27,8 +27,13 @@ neighbour.
 
 `--tray` starts the app in the tray, as the Run key does.
 
+The app updates itself from the GitHub releases through Velopack, hourly and only while no job is printing
+(`docs/updates.md`); each download, install and failure is a line in `error.log`. `NODE_PRINT_UPDATES=<feed URL>`
+points it at a Velopack feed instead, with the first check 2 s after start.
+
 A print request carries the document itself or, as JSON `{"url": …}`, a URL the app downloads in the channel's queue.
 
 CI (`.github/workflows/windows.yml`) builds, tests, publishes, packs `Setup.exe` and the portable zip, then points two
 "Microsoft Print to PDF" queues at file ports, runs the app against them (bytes and URL forms), takes screenshots and
-checks the pages that come out.
+checks the pages that come out. Last, it installs `Setup.exe`, serves a feed with the same build packed again as 9.9.9 and
+checks that the installed app updates itself to it through the delta and comes back listening.

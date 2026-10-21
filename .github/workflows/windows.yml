@@ -47,8 +47,15 @@ jobs:
         run: dotnet publish windows/NodePrint.App -c Release -p:Platform=x64 -o dist/app
 
       - name: Package
+        id: package
         run: |
           dotnet tool install -g vpk --version 1.2.161
+          # A tag build also packs a delta from the latest release: vpk pack diffs against the full package it finds in
+          # the output folder. A re-run of a version already released downloads that version itself, which is left out.
+          if ('${{ startsWith(github.ref, 'refs/tags/v') }}' -eq 'true') {
+            vpk download github --repoUrl https://github.com/Node-Live/print --token ${{ github.token }} --outputDir dist/releases
+            Remove-Item "dist/releases/NodePrint-$env:VERSION-full.nupkg" -ErrorAction SilentlyContinue
+          }
           # Signing goes here once Azure Trusted Signing is set up: vpk pack ... --azureTrustedSignFile <metadata.json>
           vpk pack --packId NodePrint --packVersion $env:VERSION --runtime win-x64 --packDir dist/app --mainExe NodePrint.exe `
             --packTitle "NODE Print" --packAuthors NODE --icon windows/NodePrint.App/Assets/NodePrint.ico `
@@ -76,6 +83,10 @@ jobs:
       - name: Run the app
         if: always()
         run: windows/ci/run-app.ps1
+
+      - name: Update check
+        if: always() && steps.package.outcome == 'success'
+        run: windows/ci/update-check.ps1
 
       - uses: actions/upload-artifact@v7
         if: always()

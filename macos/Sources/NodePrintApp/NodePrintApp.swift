@@ -78,15 +78,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         model.applyLaunchAtLogin()
         self.model = model
 
-        let server = LocalServer(api: LocalAPI(system: system, config: config))
+        Updater.removeStaging()
+        let activity = Activity()
+        let server = LocalServer(api: LocalAPI(system: system, config: config), activity: activity)
         server.start { port in
             DispatchQueue.main.async { model.listening = port != nil }
         }
         self.server = server
-        if !launchedAsLoginItem { showWindow() }
+        let updater = Updater(activity: activity)
+        Task {
+            guard await updater.run() else { return }
+            server.stop()
+            exit(0)
+        }
+        if !startsWithoutWindow { showWindow() }
     }
 
-    private var launchedAsLoginItem: Bool {
+    /// A login launch, and a restart after an update (`--tray`).
+    private var startsWithoutWindow: Bool {
+        if CommandLine.arguments.contains("--tray") { return true }
         let event = NSAppleEventManager.shared().currentAppleEvent
         return event?.eventID == kAEOpenApplication
             && event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem

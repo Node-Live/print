@@ -10,6 +10,8 @@ final class FileServer: @unchecked Sendable {
         var headers: [String: String] = [:]
         var body = Data()
         var delay: TimeInterval = 0
+        /// Runs when the request comes in, before the answer goes out.
+        var served: @Sendable () -> Void = {}
     }
 
     private let listener: NWListener
@@ -48,6 +50,7 @@ final class FileServer: @unchecked Sendable {
             let request = String(decoding: data ?? Data(), as: UTF8.self)
             let path = request.split(separator: " ").dropFirst().first.map(String.init) ?? "/"
             let answer = answers[path] ?? Answer(status: 404)
+            answer.served()
             var head = "HTTP/1.1 \(answer.status) X\r\n"
             var headers = answer.headers
             if headers["Content-Length"] == nil { headers["Content-Length"] = "\(answer.body.count)" }
